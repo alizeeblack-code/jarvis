@@ -12,8 +12,7 @@ Jarvis reads the session logs these tools already keep, sorts them by who has to
 next, and hands out new tasks that each run on their own git branch.
 
 One Python process (FastAPI) and a plain HTML/JS page: no database, no build step.
-The interface starts in Chinese; switch to English with the 中/EN button in the header
-(the main screens are fully translated, a few dialogs are not yet).
+The interface starts in Chinese; switch to English with the 中/EN button in the header.
 
 ## What it does
 

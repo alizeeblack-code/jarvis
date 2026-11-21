@@ -310,6 +310,8 @@ const STEP_EN = [
   [/^用技能 (.*)$/s, (m) => `Skill ${m[1]}`],
   [/^改 (.*)$/s, (m) => `Edit ${m[1]}`], [/^读 (.*)$/s, (m) => `Read ${m[1]}`], [/^搜 (.*)$/s, (m) => `Search ${m[1]}`],
 ];
+const tz = (zh, en) => (state.lang === 'en' ? en : zh);
+
 function stepText(s) {
   if (!s || state.lang !== 'en') return s;
   for (const [re, fn] of STEP_EN) {
@@ -355,13 +357,133 @@ function isMobile() { return _mobileQuery.matches; }
 
 // ─── API ────────────────────────────────────────────────────────────────────
 
+
+// ─── English for the static page and for server messages ─────────────────────
+// index.html is written in Chinese; its texts / titles / placeholders are captured
+// once and swapped by this table when the language changes.
+const STATIC_EN = {
+  '回到首页': 'Home', '手机访问': 'Open on your phone', '切换主题': 'Theme', '语言': 'Language',
+  'WebSocket 状态': 'Connection', '现在': 'Now', '全部': 'All', '项目': 'Projects', '+ 添加任务': '+ New task',
+  '输入任务内容，回车添加…': 'Describe a task, press Enter to add…', '添加': 'Add', '添加 Todo': 'Add Todo',
+  '发现本地项目': 'Find local projects', '+ 新建项目': '+ New Project', '最近 14 天': 'Last 14 days',
+  '按项目': 'By project', '按 AI': 'By AI', '返回项目列表': 'Back to projects', '搜索任务...': 'Search tasks...',
+  '列表': 'List', '看板': 'Board', '分析': 'Analytics', '访问地址': 'Access URLs', '端口': 'Port', '保存': 'Save',
+  '自动分配独立端口': 'Assign a free port', '自动': 'Auto', '项目设置': 'Project settings',
+  '添加新任务... (Cmd/Ctrl+Enter 提交)': 'Add new task... (Cmd/Ctrl+Enter to submit)', '交给': 'Hand to',
+  '先放 Todo': 'Park in Todo', '交给 Claude': 'Hand to Claude', '交给 Codex': 'Hand to Codex',
+  '交给 Antigravity': 'Hand to Antigravity', '我自己做': "I'll do it", 'Antigravity 模型': 'Antigravity model',
+  '添加图片': 'Add image', '发送': 'Send', '排队': 'Queued', '进行中': 'Running', '等你': 'Your turn',
+  '已完成': 'Done', '归档旧任务': 'Archive old tasks', '7天': '7 days', '30天': '30 days', '每日趋势': 'Daily trend',
+  '待 Review': 'Review', '确认并创建任务': 'Approve & create tasks', '修改反馈': 'Request changes',
+  '重新回答': 'Answer again', '删除任务': 'Delete task', '退出全屏': 'Exit full screen',
+  '发现本地 Claude Code 项目': 'Find local Claude Code projects', '扫描中...': 'Scanning...',
+  '导入选中项目': 'Add selected projects', '关闭': 'Close', '新建项目': 'New project', '项目名称': 'Project name',
+  '项目目录': 'Project folder', '浏览': 'Browse',
+  '输入本地目录路径，不存在的目录会自动创建': "Path to a local folder; it's created if it doesn't exist",
+  '选择当前目录': 'Use this folder',
+  '完全跳过权限 (--dangerously-skip-permissions)': 'Skip all permission checks (--dangerously-skip-permissions)',
+  '关闭时 Codex、Antigravity 在沙箱里运行（只能写工作区，可联网）。Claude 不受此项影响，始终自动批准所有操作。开启后三者都不受限制。':
+    'Off: Codex and Antigravity run in their sandbox (write access to the workspace only, network allowed). Claude is not affected and always approves every action. On: none of them is restricted.',
+  '自动 Git Commit': 'Auto git commit', '任务完成后 Claude Code 自动提交代码': 'Commit the changes when a task finishes',
+  '合并前测试命令': 'Test command before merging', '工作区准备命令': 'Worktree setup command',
+  '最大并行任务数': 'Max parallel tasks',
+  'Git 项目通过独立 Worktree 并行执行不同任务（默认 3，非 Git 项目串行）': 'Git projects run tasks in parallel, each in its own worktree (default 3; other folders run one at a time)',
+  '开发服务端口': 'Dev server port', '留空自动分配独立端口': 'Leave empty to assign a free port',
+  '每个项目独立端口，避免与其他项目或 Jarvis 冲突': 'One port per project, so it never clashes with another project or Jarvis',
+  '创建项目': 'Create project', '取消': 'Cancel', '确定': 'OK',
+  '请竖屏使用 Jarvis': 'Rotate to portrait', '竖屏浏览与操作体验更佳': 'Portrait mode works best on mobile',
+  '仍要横屏查看': 'Continue anyway',
+};
+const staticTexts = [];
+function captureStaticTexts() {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = walker.nextNode())) {
+    const key = n.data.trim();
+    if (STATIC_EN[key]) staticTexts.push({ node: n, zh: n.data, en: n.data.replace(key, STATIC_EN[key]) });
+  }
+  document.querySelectorAll('[title],[placeholder],[aria-label]').forEach((el) => {
+    ['title', 'placeholder', 'aria-label'].forEach((attr) => {
+      const v = el.getAttribute(attr);
+      if (v && STATIC_EN[v]) staticTexts.push({ el, attr, zh: v, en: STATIC_EN[v] });
+    });
+  });
+}
+function applyStaticTexts() {
+  const en = state.lang === 'en';
+  for (const x of staticTexts) {
+    if (x.attr) x.el.setAttribute(x.attr, en ? x.en : x.zh);
+    else x.node.data = en ? x.en : x.zh;
+  }
+}
+
+// Messages the server writes in Chinese (errors, notes); dynamic parts are kept.
+const SERVER_EN = [
+  [/^只能在运行 Jarvis 的电脑上查看$/, 'Only available on the machine running Jarvis'],
+  [/^这个执行者不支持这个档位$/, "This agent doesn't support that effort level"],
+  [/^这个任务没有待合并的分支$/, 'This task has no branch to merge'],
+  [/^这条线上还有任务在执行，等它停下再合并$/, 'A task on this line is still running; merge once it stops'],
+  [/^指令不能为空$/, 'The instruction is empty'],
+  [/^这个会话不能从网页续写$/, "This session can't be continued from here"],
+  [/^只有 Codex 会话可以复制成新会话$/, 'Only Codex sessions can be copied into a new session'],
+  [/^这条指令已经开始执行，无法撤回$/, "This instruction has already started and can't be withdrawn"],
+  [/^找不到这条排队指令$/, "That queued instruction wasn't found"],
+  [/^仓库还没有任何提交，无法开分支$/, 'The repository has no commits yet, so no branch can be made'],
+  [/^没有需要合并的提交$/, 'Nothing to merge'],
+  [/^测试没通过，没有合并$/, 'Tests failed; nothing was merged'],
+  [/^和 main 有冲突，没有合并（可以让这个会话先把 main 合进来解决冲突）$/, 'Conflicts with main; nothing was merged (ask this session to merge main in and resolve them first)'],
+  [/^这个会话正在执行上一条指令$/, 'This session is still running the previous instruction'],
+  [/^跨站请求已拒绝$/, 'Cross-site request refused'], [/^需要访问令牌$/, 'Access token required'],
+  [/^没有可用的项目端口$/, 'No free port left for the project'],
+  [/^端口号必须为 1 到 65535 之间的整数$/, 'The port must be a whole number from 1 to 65535'],
+  [/^端口 (\d+) 已被 Jarvis 服务占用，请使用其他端口$/, 'Port $1 is used by Jarvis itself; pick another'],
+  [/^端口 (\d+) 已被项目「(.+)」占用，请换一个端口$/, 'Port $1 is taken by project "$2"; pick another'],
+  [/^找不到 agy 命令$/, 'agy command not found'], [/^agy 用量查询超时$/, 'agy usage check timed out'],
+  [/^agy 用量结果无法解析$/, "Couldn't read the agy usage"], [/^agy 没有返回用量$/, 'agy returned no usage'],
+  [/^找不到 claude 命令$/, 'claude command not found'], [/^刷新超时$/, 'Refresh timed out'],
+  [/^发出后会话没有任何动静$/, 'No activity in the session after sending'],
+  [/^服务重启打断了这一轮，可以回复「继续」接着做$/, 'A restart cut this turn short; reply "continue" to pick it up'],
+  [/^发送失败$/, 'Send failed'],
+  [/^agy 没有输出（可能需要先在终端里运行一次 agy 完成首次设置）$/, 'agy produced no output (run agy once in a terminal to finish its first-time setup)'],
+  [/^agy 没有完成：([\s\S]*)$/, 'agy did not finish: $1'],
+  [/^创建工作区失败：([\s\S]*)$/, 'Could not create the worktree: $1'],
+  [/^工作区准备命令失败：([\s\S]*)$/, 'Worktree setup command failed: $1'],
+  [/^超过 (\d+) 分钟没结束$/, 'Still running after $1 minutes'],
+  [/^(\S+) 超过 (\d+) 分钟没结束，已终止$/, '$1 ran over $2 minutes and was stopped'],
+  [/^(.+) 在 (\S+) 上有未提交的改动，先提交或暂存再合并$/, '$1 has uncommitted changes on $2; commit or stash them, then merge'],
+  [/^合并失败：([\s\S]*)$/, 'Merge failed: $1'],
+  [/^会话原来的目录不存在：（未知）$/, "The session's folder no longer exists"],
+  [/^会话原来的目录不存在：([\s\S]*)$/, "The session's folder no longer exists: $1"],
+  [/^退出码 (-?\d+)：([\s\S]*)$/, 'Exit code $1: $2'], [/^退出码 (-?\d+)$/, 'Exit code $1'],
+  [/^找不到命令 (.+)$/, 'Command not found: $1'],
+  [/^复制会话失败：([\s\S]*)$/, 'Could not copy the session: $1'], [/^复制会话失败$/, 'Could not copy the session'],
+  [/^这个 Codex 会话正开在[\s\S]*codex 里，Codex 同一时间只允许一处写入。先在那边退出（\/quit），或者直接在那边继续。$/,
+    'This Codex session is open in codex elsewhere, and Codex allows one writer at a time. Quit it there (/quit) or continue there.'],
+];
+const SERVER_NAMES_EN = { '其它': 'Other', '（无标题）': '(untitled)', '局域网': 'LAN' };
+function serverText(s) {
+  for (const [re, en] of SERVER_EN) if (re.test(s)) return s.replace(re, en);
+  return s;
+}
+function localizeServer(x) {
+  if (state.lang !== 'en' || !x || typeof x !== 'object') return x;
+  if (Array.isArray(x)) { x.forEach(localizeServer); return x; }
+  for (const [k, v] of Object.entries(x)) {
+    if (typeof v === 'string') {
+      if (k === 'error' || k === 'note' || k === 'failed' || k === 'err') x[k] = serverText(v);
+      else if ((k === 'name' || k === 'title' || k === 'label' || k === 'project_name') && SERVER_NAMES_EN[v]) x[k] = SERVER_NAMES_EN[v];
+    } else if (v && typeof v === 'object') localizeServer(v);
+  }
+  return x;
+}
+
 async function api(path, options = {}) {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
-  return res.json();
+  return localizeServer(await res.json());
 }
 
 // ─── WebSocket ──────────────────────────────────────────────────────────────
@@ -382,7 +504,7 @@ function connectWS() {
 
   state.ws.onmessage = (event) => {
     try {
-      handleWSMessage(JSON.parse(event.data));
+      handleWSMessage(localizeServer(JSON.parse(event.data)));
     } catch (e) {
       console.warn('WS parse error:', e);
     }
@@ -915,13 +1037,13 @@ function renderCard(task, card = null) {
   } else if (task.status === 'failed' || task.status === 'cancelled') {
     actions = `
       <div class="card-actions">
-        <button class="card-action-btn" data-task-id="${task.id}" data-action="retry" title="重试">↻</button>
-        <button class="card-action-btn danger" data-task-id="${task.id}" data-action="delete" title="删除">🗑</button>
+        <button class="card-action-btn" data-task-id="${task.id}" data-action="retry" title="${tz('重试', 'Retry')}">↻</button>
+        <button class="card-action-btn danger" data-task-id="${task.id}" data-action="delete" title="${tz('删除', 'Delete')}">🗑</button>
       </div>`;
   } else if (task.status === 'in_progress') {
     actions = `
       <div class="card-actions">
-        <button class="card-action-btn danger" data-task-id="${task.id}" data-action="cancel" title="取消">✕</button>
+        <button class="card-action-btn danger" data-task-id="${task.id}" data-action="cancel" title="${tz('取消', 'Cancel')}">✕</button>
       </div>`;
   }
 
@@ -937,7 +1059,7 @@ function renderCard(task, card = null) {
     const isWarning = elapsed > 900; // 15 minutes
     durationHtml = `<div class="card-duration${isWarning ? ' warning' : ''}">
       <svg viewBox="0 0 24 24" width="12" height="12"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
-      ${t('runningFor') || '已运行'} ${durStr}</div>`;
+      ${t('runningFor')} ${durStr}</div>`;
   }
 
   // Latest log preview for in_progress tasks
@@ -1073,7 +1195,7 @@ function openTaskModal(taskId, taskObj = null) {
       const questions = task.plan_questions || [];
       const answeredQs = questions.filter(q => q.answer);
       bodyHTML += `<div class="task-summary plan-summary">`;
-      bodyHTML += `<h3>Plan 决策摘要</h3>`;
+      bodyHTML += `<h3>${tz('Plan 决策摘要', 'Plan decisions')}</h3>`;
 
       // Find all successor implementation tasks
       // Prefer stored IDs; fallback: find tasks whose description references this plan
@@ -1086,10 +1208,12 @@ function openTaskModal(taskId, taskObj = null) {
               (t.description || '').includes(`[来自 Plan #${task.id}`)
             ));
       if (successors.length > 0) {
-        const sLabels = {pending:'⏳ 待开发', in_progress:'🔄 开发中', done:'✅ 已完成', failed:'❌ 失败', cancelled:'🚫 已取消'};
+        const sLabels = state.lang === 'en'
+          ? {pending:'⏳ Queued', in_progress:'🔄 In progress', done:'✅ Done', failed:'❌ Failed', cancelled:'🚫 Cancelled'}
+          : {pending:'⏳ 待开发', in_progress:'🔄 开发中', done:'✅ 已完成', failed:'❌ 失败', cancelled:'🚫 已取消'};
         bodyHTML += `<div class="plan-successors">`;
         successors.forEach(s => {
-          bodyHTML += `<div class="plan-successor" data-task-id="${s.id}">实现任务 <strong>#${s.id}</strong> ${sLabels[s.status] || s.status}</div>`;
+          bodyHTML += `<div class="plan-successor" data-task-id="${s.id}">${tz('实现任务', 'Task')} <strong>#${s.id}</strong> ${sLabels[s.status] || s.status}</div>`;
         });
         bodyHTML += `</div>`;
       }
@@ -1112,13 +1236,13 @@ function openTaskModal(taskId, taskObj = null) {
       if (originalSubtasks.length > 0 && (adoptedSubtasks.length > 0 || task.plan_adopted_subtasks)) {
         const adoptedIndices = new Set(adoptedSubtasks.map(st => st.index));
         bodyHTML += `<div class="plan-subtask-summary">`;
-        bodyHTML += `<div class="plan-subtask-summary-title">子任务决策</div>`;
+        bodyHTML += `<div class="plan-subtask-summary-title">${tz('子任务决策', 'Subtasks')}</div>`;
         originalSubtasks.forEach(st => {
           const adopted = adoptedIndices.has(st.index);
           bodyHTML += `<div class="plan-subtask-status ${adopted ? 'adopted' : 'deleted'}">`;
           bodyHTML += `<span>${adopted ? '✅' : '❌'}</span> `;
           bodyHTML += `<span>${st.index}. ${escapeHtml(st.title)}</span>`;
-          bodyHTML += `<span class="plan-subtask-label">${adopted ? '已采纳' : '已删除'}</span>`;
+          bodyHTML += `<span class="plan-subtask-label">${adopted ? tz('已采纳', 'Kept') : tz('已删除', 'Dropped')}</span>`;
           bodyHTML += `</div>`;
         });
         bodyHTML += `</div>`;
@@ -1135,7 +1259,7 @@ function openTaskModal(taskId, taskObj = null) {
         });
         bodyHTML += `</div>`;
       } else if (questions.length > 0) {
-        bodyHTML += `<div class="plan-no-answers">${questions.length} 个问题（未记录回答）</div>`;
+        bodyHTML += `<div class="plan-no-answers">${tz(`${questions.length} 个问题（未记录回答）`, `${questions.length} question(s), no answers recorded`)}</div>`;
       }
       bodyHTML += `</div>`;
     } else {
@@ -1147,7 +1271,7 @@ function openTaskModal(taskId, taskObj = null) {
         if (outputLog) summaryText = outputLog.message ? outputLog.message.slice(9) : (outputLog.content || '');
       }
       if (summaryText) {
-        bodyHTML += `<div class="task-summary"><h3>完成总结</h3><div class="md-content">${renderMarkdown(summaryText)}</div></div>`;
+        bodyHTML += `<div class="task-summary"><h3>${tz('完成总结', 'Summary')}</h3><div class="md-content">${renderMarkdown(summaryText)}</div></div>`;
       }
     }
   }
@@ -1170,10 +1294,10 @@ function openTaskModal(taskId, taskObj = null) {
   const subtasks = task.plan_subtasks || [];
   if (subtasks.length > 0) {
     const isReviewMode = task.status === 'review';
-    bodyHTML += `<h3>子任务列表 (${subtasks.length})</h3>`;
+    bodyHTML += `<h3>${tz('子任务列表', 'Subtasks')} (${subtasks.length})</h3>`;
     bodyHTML += `<div class="subtask-list" id="subtaskList">`;
     subtasks.forEach((st, i) => {
-      const deps = (st.depends_on || []).map(d => `#${d}`).join(', ') || '无';
+      const deps = (st.depends_on || []).map(d => `#${d}`).join(', ') || tz('无', 'none');
       const files = (st.files || []).join(', ') || '-';
       bodyHTML += `<div class="subtask-card" data-index="${i}">
         <div class="subtask-header">
@@ -1181,7 +1305,7 @@ function openTaskModal(taskId, taskObj = null) {
           ${isReviewMode
             ? `<input class="subtask-title-input" value="${escapeHtml(st.title)}" data-field="title" data-i="${i}">`
             : `<span class="subtask-title">${escapeHtml(st.title)}</span>`}
-          ${isReviewMode ? `<button class="subtask-del" data-i="${i}" title="删除">✕</button>` : ''}
+          ${isReviewMode ? `<button class="subtask-del" data-i="${i}" title="${tz('删除', 'Delete')}">✕</button>` : ''}
         </div>
         <div class="subtask-body">
           ${isReviewMode
@@ -1189,7 +1313,7 @@ function openTaskModal(taskId, taskObj = null) {
             : `<div class="subtask-desc">${escapeHtml(st.description)}</div>`}
           <div class="subtask-meta">
             <span>📁 ${escapeHtml(files)}</span>
-            <span>🔗 依赖: ${escapeHtml(deps)}</span>
+            <span>🔗 ${tz('依赖', 'Depends on')}: ${escapeHtml(deps)}</span>
           </div>
         </div>
       </div>`;
@@ -1197,7 +1321,7 @@ function openTaskModal(taskId, taskObj = null) {
     bodyHTML += `</div>`;
     if (isReviewMode) {
       bodyHTML += `<div class="subtask-actions">
-        <button class="btn btn-small" id="addSubtaskBtn">+ 添加子任务</button>
+        <button class="btn btn-small" id="addSubtaskBtn">${tz('+ 添加子任务', '+ Add subtask')}</button>
       </div>`;
     }
   }
@@ -1207,7 +1331,7 @@ function openTaskModal(taskId, taskObj = null) {
   // Interactive questions from Plan Mode (Step 9)
   const isReview = task.status === 'review';
   if (task.plan_questions && task.plan_questions.length > 0) {
-    const headerText = isReview ? 'Claude 的问题（请回答后再确认）' : 'Claude 的问题';
+    const headerText = isReview ? tz('Claude 的问题（请回答后再确认）', 'Questions from Claude (answer them, then approve)') : tz('Claude 的问题', 'Questions from Claude');
     bodyHTML += `<div class="plan-questions-header">
       <svg viewBox="0 0 24 24" width="18" height="18" style="vertical-align:middle;margin-right:6px;">
         <circle cx="12" cy="12" r="10" stroke="var(--primary)" stroke-width="2" fill="none"/>
@@ -1221,7 +1345,7 @@ function openTaskModal(taskId, taskObj = null) {
       bodyHTML += `<div class="question-card" data-question-index="${qi}">`;
       bodyHTML += `<div class="q-label">${escapeHtml(q.question)}</div>`;
       if (q.type === 'text') {
-        bodyHTML += `<input type="text" class="form-input q-text-input" data-qi="${qi}" placeholder="输入你的回答..." value="${escapeHtml(q.answer || '')}"${disabledAttr}>`;
+        bodyHTML += `<input type="text" class="form-input q-text-input" data-qi="${qi}" placeholder="${tz('输入你的回答...', 'Your answer...')}" value="${escapeHtml(q.answer || '')}"${disabledAttr}>`;
       } else if (q.choices && q.choices.length === 1) {
         // Single suggestion — show it with accept + custom option
         const suggestion = q.choices[0];
@@ -1229,9 +1353,9 @@ function openTaskModal(taskId, taskObj = null) {
         const isAccepted = answered === suggestion;
         bodyHTML += `<div class="q-suggestion">${escapeHtml(suggestion)}</div>`;
         bodyHTML += `<div class="choice-grid">`;
-        bodyHTML += `<button class="choice-btn${isAccepted ? ' selected' : ''}" data-qi="${qi}" data-choice="${escapeHtml(suggestion)}"${disabledAttr}>同意建议</button>`;
+        bodyHTML += `<button class="choice-btn${isAccepted ? ' selected' : ''}" data-qi="${qi}" data-choice="${escapeHtml(suggestion)}"${disabledAttr}>${tz('同意建议', 'Accept suggestion')}</button>`;
         bodyHTML += `</div>`;
-        bodyHTML += `<input type="text" class="form-input q-text-input q-custom" data-qi="${qi}" placeholder="或输入自定义回答..." value="${!isAccepted ? escapeHtml(answered) : ''}"${disabledAttr}>`;
+        bodyHTML += `<input type="text" class="form-input q-text-input q-custom" data-qi="${qi}" placeholder="${tz('或输入自定义回答...', 'Or type your own answer...')}" value="${!isAccepted ? escapeHtml(answered) : ''}"${disabledAttr}>`;
       } else {
         bodyHTML += `<div class="choice-grid">`;
         (q.choices || []).forEach(choice => {
@@ -1239,7 +1363,7 @@ function openTaskModal(taskId, taskObj = null) {
           bodyHTML += `<button class="choice-btn${sel}" data-qi="${qi}" data-choice="${escapeHtml(choice)}"${disabledAttr}>${escapeHtml(choice)}</button>`;
         });
         bodyHTML += `</div>`;
-        bodyHTML += `<input type="text" class="form-input q-text-input q-custom" data-qi="${qi}" placeholder="或输入自定义回答..."${disabledAttr}>`;
+        bodyHTML += `<input type="text" class="form-input q-text-input q-custom" data-qi="${qi}" placeholder="${tz('或输入自定义回答...', 'Or type your own answer...')}"${disabledAttr}>`;
       }
       bodyHTML += `</div>`;
     });
@@ -1286,10 +1410,10 @@ function openTaskModal(taskId, taskObj = null) {
   if (allLogs.length > 0) {
     bodyHTML += `<h3>${t('taskLog')}</h3>`;
     bodyHTML += `<div class="log-filters">
-      <button class="log-filter active" data-filter="all">全部</button>
-      <button class="log-filter" data-filter="tool">工具</button>
-      <button class="log-filter" data-filter="message">消息</button>
-      <button class="log-filter" data-filter="error">错误</button>
+      <button class="log-filter active" data-filter="all">${tz('全部', 'All')}</button>
+      <button class="log-filter" data-filter="tool">${tz('工具', 'Tools')}</button>
+      <button class="log-filter" data-filter="message">${tz('消息', 'Messages')}</button>
+      <button class="log-filter" data-filter="error">${tz('错误', 'Errors')}</button>
     </div>`;
     bodyHTML += `<div id="modalLogList">`;
     for (const log of allLogs.slice(-50)) {
@@ -1354,7 +1478,7 @@ function openTaskModal(taskId, taskObj = null) {
     addBtn.addEventListener('click', () => {
       const nextIdx = state.editedSubtasks.length + 1;
       state.editedSubtasks.push({
-        index: nextIdx, title: '新子任务', description: '',
+        index: nextIdx, title: tz('新子任务', 'New subtask'), description: '',
         files: [], depends_on: []
       });
       // Update task data so re-render sees it
@@ -1375,7 +1499,7 @@ function openTaskModal(taskId, taskObj = null) {
     $('#modalApprove').classList.add('hidden');
     $('#modalFeedback').classList.add('hidden');
     $('#modalReopen').classList.remove('hidden');
-    $('#modalReopen').textContent = hasPlanQuestions ? '重新回答' : '重新打开';
+    $('#modalReopen').textContent = hasPlanQuestions ? tz('重新回答', 'Answer again') : tz('重新打开', 'Reopen');
     $('#modalDelete').classList.add('hidden');
   } else {
     $('#modalApprove').classList.add('hidden');
@@ -1487,6 +1611,7 @@ function toggleLang() {
 }
 
 function applyLanguage() {
+  applyStaticTexts();
   $('#taskInput').placeholder = t('addTask');
   // submitBtn now uses SVG icon, no text to update
   $('#modalApprove').textContent = t('approve');
@@ -1642,7 +1767,7 @@ async function submitTask() {
       state.uploadedImages = prevImages;
       renderImagePreviews();
     }
-    showToast(err?.message || '提交失败', 'error');
+    showToast(err?.message || tz('提交失败', 'Submit failed'), 'error');
   }
 }
 
@@ -1783,10 +1908,10 @@ function bindEvents() {
     const area = document.createElement('div');
     area.className = 'plan-feedback-area';
     area.innerHTML = `
-      <textarea class="plan-feedback-input" placeholder="输入你的反馈，Claude 会在原方案基础上修改..." rows="3"></textarea>
+      <textarea class="plan-feedback-input" placeholder="${tz('输入你的反馈，Claude 会在原方案基础上修改...', 'Your feedback; Claude will revise the plan...')}" rows="3"></textarea>
       <div class="plan-feedback-actions">
-        <button class="btn btn-primary plan-feedback-submit">提交反馈</button>
-        <button class="btn btn-ghost plan-feedback-cancel">取消</button>
+        <button class="btn btn-primary plan-feedback-submit">${tz('提交反馈', 'Send feedback')}</button>
+        <button class="btn btn-ghost plan-feedback-cancel">${tz('取消', 'Cancel')}</button>
       </div>
     `;
     $('#modalBody').appendChild(area);
@@ -2064,7 +2189,7 @@ function renderLogEntry(log) {
   // Collapsible for long content
   const isLong = content.length > 200;
   const displayContent = isLong ? content.slice(0, 200) + '…' : content;
-  const expandBtn = isLong ? ` <span class="log-expand" onclick="this.parentElement.querySelector('.log-full').style.display='block';this.style.display='none'">展开</span>` : '';
+  const expandBtn = isLong ? ` <span class="log-expand" onclick="this.parentElement.querySelector('.log-full').style.display='block';this.style.display='none'">${tz('展开', 'More')}</span>` : '';
   const fullContent = isLong ? `<div class="log-full" style="display:none">${escapeHtml(content)}</div>` : '';
 
   // Status badge for tool entries
@@ -2144,16 +2269,16 @@ function appendModalEvent(eventName, data, timestamp) {
 
 async function openDiscoverModal() {
   $('#discoverModalOverlay').classList.add('active');
-  $('#discoverList').innerHTML = '<div class="loading">扫描 ~/.claude/projects/ ...</div>';
+  $('#discoverList').innerHTML = `<div class="loading">${tz('扫描', 'Scanning')} ~/.claude/projects/ ...</div>`;
 
   const resp = await api('/discover-projects');
   if (!resp || !resp.projects) {
-    $('#discoverList').innerHTML = '<p>扫描失败</p>';
+    $('#discoverList').innerHTML = `<p>${tz('扫描失败', 'Scan failed')}</p>`;
     return;
   }
 
   if (resp.projects.length === 0) {
-    $('#discoverList').innerHTML = '<p>未发现本地 Claude Code 项目。请先在某个项目目录中使用过 Claude Code。</p>';
+    $('#discoverList').innerHTML = `<p>${tz('未发现本地 Claude Code 项目。请先在某个项目目录中使用过 Claude Code。', 'No local Claude Code projects found. Use Claude Code in a project folder first.')}</p>`;
     return;
   }
 
@@ -2167,11 +2292,11 @@ async function openDiscoverModal() {
                data-name="${escapeHtml(p.name)}" ${imported ? 'disabled checked' : ''}>
         <div class="discover-info">
           <div class="discover-name">${escapeHtml(p.name)}
-            ${imported ? '<span class="discover-badge">已导入</span>' : ''}
+            ${imported ? `<span class="discover-badge">${tz('已导入', 'Added')}</span>` : ''}
           </div>
           <div class="discover-path">${escapeHtml(p.path)}</div>
           <div class="discover-meta">
-            ${p.session_count} 个会话 · 最近活跃 ${lastActive}
+            ${tz(`${p.session_count} 个会话 · 最近活跃 ${lastActive}`, `${p.session_count} sessions · last active ${lastActive}`)}
             ${p.first_prompt ? ` · "${escapeHtml(p.first_prompt.slice(0, 40))}"` : ''}
           </div>
         </div>
@@ -2235,7 +2360,7 @@ async function loadDir(path) {
   // Render directory list
   const listEl = $('#dirList');
   if (data.dirs.length === 0) {
-    listEl.innerHTML = '<div class="dir-empty">无子目录</div>';
+    listEl.innerHTML = `<div class="dir-empty">${tz('无子目录', 'No subfolders')}</div>`;
   } else {
     listEl.innerHTML = data.dirs.map(d => `
       <div class="dir-item" data-path="${escapeHtml(d.path)}">
@@ -3689,10 +3814,10 @@ async function initAccess() {
   wrap.classList.remove('hidden');
   if (data.local_only) {
     list.innerHTML = `<div class="project-url-row is-empty"><div class="project-url-meta">
-      <span class="project-url-value">只在本机监听。用 <code>JARVIS_HOST=0.0.0.0 ./start.sh</code> 启动后，其他设备凭令牌访问。</span>
+      <span class="project-url-value">${tz('只在本机监听。用 <code>JARVIS_HOST=0.0.0.0 ./start.sh</code> 启动后，其他设备凭令牌访问。', 'Listening on this machine only. Start with <code>JARVIS_HOST=0.0.0.0 ./start.sh</code> and other devices can sign in with the token.')}</span>
     </div></div>`;
   } else if (!data.urls.length) {
-    list.innerHTML = `<div class="project-url-row is-empty"><div class="project-url-meta"><span class="project-url-value">没有找到局域网或 Tailscale 地址</span></div></div>`;
+    list.innerHTML = `<div class="project-url-row is-empty"><div class="project-url-meta"><span class="project-url-value">${tz('没有找到局域网或 Tailscale 地址', 'No LAN or Tailscale address found')}</span></div></div>`;
   } else {
     list.innerHTML = data.urls.map(u => {
       const safe = escapeHtml(u.url);
@@ -3726,6 +3851,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.documentElement.setAttribute('data-theme', state.theme);
   $('#langLabel').textContent = state.lang === 'zh' ? '中' : 'EN';
 
+  captureStaticTexts();
   bindEvents();
   applyLanguage();
   connectWS();

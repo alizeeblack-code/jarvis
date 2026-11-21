@@ -133,7 +133,18 @@ p{margin:0;font-size:13px;opacity:.65}
 <input name="token" type="password" placeholder="访问令牌" autocomplete="current-password" autofocus required>
 <button>进入</button>
 <p>令牌在运行 Jarvis 的电脑上：页头「手机访问」或 data/access_token</p>
-</form></body></html>"""
+</form><script>
+// the language this device last used in Jarvis, else the browser's
+let lang = null;
+try { lang = localStorage.getItem("lang"); } catch (e) {}
+if ((lang || (navigator.language.toLowerCase().startsWith("zh") ? "zh" : "en")) === "en") {
+  document.documentElement.lang = "en";
+  document.querySelector("input").placeholder = "Access token";
+  document.querySelector("button").textContent = "Enter";
+  document.querySelector("p").textContent =
+    "The token is on the machine running Jarvis: the phone button in its header, or data/access_token";
+}
+</script></body></html>"""
 
 
 class AccessMiddleware:
