@@ -338,7 +338,7 @@
     if (pill) { /* state, progress and step are in the pill */ }
     else if (c.state === 'error' || c.state === 'limit') bits.push(esc(c.err));
     else if (c.todo && c.todo.total) bits.push(`${c.todo.done}/${c.todo.total}${c.todo.cur ? ' · ' + esc(c.todo.cur) : ''}`);
-    else if (c.step) bits.push(`<span class="ov-mono">${esc(c.step)}</span>`);
+    else if (c.step) bits.push(`<span class="ov-mono">${esc(stepText(c.step))}</span>`);
     bits.push(ago(c.last_at));
     if (dur && c.active_ms) bits.push(fmtDur(c.active_ms));
     return bits.join(' · ') + (c.ctx_level ? ` ${ctxChipHtml(c)}` : '');
@@ -907,7 +907,7 @@
       const st = dispState(c);
       return `
       <button class="pv-chip st-${st} agent-${esc(ag)}" data-sid="${esc(c.sid)}" data-agent="${esc(ag)}" ${c.task ? `data-pid="${c.task.project_id}" data-tid="${c.task.task_id}"` : ''}
-        title="${esc(c.step || c.title)}">
+        title="${esc(stepText(c.step) || c.title)}">
         ${agentTag(ag)}
         <span class="pv-chip-title">${esc(c.title)}</span>
         <span class="pv-chip-state">${tr(st)}</span>
@@ -930,9 +930,9 @@
       bits.push(`${todo.done}/${todo.total}`);
       if (todo.cur) bits.push(esc(todo.cur));
     } else if (live.step) {
-      bits.push(`<span class="ov-mono">${esc(live.step)}</span>`);
+      bits.push(`<span class="ov-mono">${esc(stepText(live.step))}</span>`);
     }
-    const tip = [todo ? checklistText(todo) : live.step, live.out ? `${fmtTok(live.out)} tok` : '']
+    const tip = [todo ? checklistText(todo) : stepText(live.step), live.out ? `${fmtTok(live.out)} tok` : '']
       .filter(Boolean).join('\n');
     const cls = [`card-pill`, `st-${st}`, `agent-${task.agent || 'claude'}`,
                  todo && todo.total ? 'is-determinate' : ''].join(' ');

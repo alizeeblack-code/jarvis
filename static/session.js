@@ -247,7 +247,7 @@
     const moving = current && prog ? `<span class="cv-tools-prog">${esc(tr('progress', prog.steps, prog.min))}</span>` : '';
     return `<details class="cv-tools ${current ? 'live' : ''}" data-k="${key}">
         <summary><span class="cv-tools-sum">${esc(head)}</span>${moving}${errs ? ` <span class="cv-tools-err">· ${tr('errs', errs)}</span>` : ''}${shots && !current ? ` · ${tr('imgs', shots)}` : ''}</summary>
-        <div class="cv-step-list">${tools.map((i) => `<div class="cv-step ${i.err ? 'err' : ''}">${esc(i.t)}</div>${imgsHtml(sid, i.imgs)}`).join('')}</div>
+        <div class="cv-step-list">${tools.map((i) => `<div class="cv-step ${i.err ? 'err' : ''}">${esc(stepText(i.t))}</div>${imgsHtml(sid, i.imgs)}`).join('')}</div>
       </details>`;
   }
 

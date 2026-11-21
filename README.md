@@ -4,7 +4,7 @@
 
 **Every coding agent on your machine in one place — and the one waiting for you, answered from your desk or your phone.**
 
-![Overview: today's activity, what is running and what is waiting for you](docs/images/overview.png)
+![Overview: today's activity, what is running and what is waiting for you](docs/images/en/overview.png)
 
 With Claude Code, Codex and Antigravity sessions running side by side, the hard part
 is no longer the code; it is noticing which session has stopped to ask you something.
@@ -12,7 +12,8 @@ Jarvis reads the session logs these tools already keep, sorts them by who has to
 next, and hands out new tasks that each run on their own git branch.
 
 One Python process (FastAPI) and a plain HTML/JS page: no database, no build step.
-The interface is mainly in Chinese; the 中/EN toggle in the header translates part of it.
+The interface starts in Chinese; switch to English with the 中/EN button in the header
+(the main screens are fully translated, a few dialogs are not yet).
 
 ## What it does
 
@@ -26,11 +27,11 @@ The interface is mainly in Chinese; the 中/EN toggle in the header translates p
 - **A board by who acts next.** Todo / Queued / Running / Waiting for you / Done.
 - **Quota at a glance.** What is left of your Claude, Codex and Antigravity limits.
 
-![Project board: one card per line of work](docs/images/board.png)
+![Project board: one card per line of work](docs/images/en/board.png)
 
 <p>
-  <img src="docs/images/session.png" width="68%" alt="Session panel: a session asking which fix to make">
-  <img src="docs/images/mobile.png" width="21%" alt="The overview on a phone">
+  <img src="docs/images/en/session.png" width="68%" alt="Session panel: a session asking which fix to make">
+  <img src="docs/images/en/mobile.png" width="21%" alt="The overview on a phone">
 </p>
 
 <sub>Screenshots use made-up demo projects.</sub>

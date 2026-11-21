@@ -123,6 +123,20 @@ const i18n = {
     analyticsTotal: '总任务',
     analyticsSuccessRate: '成功率',
     analyticsAvgDuration: '平均耗时',
+    discover: '发现本地项目',
+    searchTasks: '搜索任务...',
+    statTotal: '总完成',
+    statWeek: '本周',
+    statAvg: '平均耗时',
+    tipHome: '回到首页',
+    tipPhone: '手机访问',
+    tipTheme: '切换主题',
+    tipLang: '语言',
+    tipBack: '返回项目列表',
+    tipSettings: '项目设置',
+    tipImage: '添加图片',
+    tipSend: '发送',
+    tipArchive: '归档旧任务',
     analyticsTotalCost: '总成本',
     analyticsDailyTrend: '每日趋势',
     analyticsDone: '完成',
@@ -191,7 +205,7 @@ const i18n = {
     failed: 'Failed',
     cancelled: 'Cancelled',
     col_todo: 'Todo', col_pending: 'Queued', col_in_progress: 'Running', col_wait: 'Your turn', col_done: 'Done',
-    rounds: (n) => `${n} rounds`, archived: 'Archived', hideCard: 'Put away', toMerge: 'To merge',
+    rounds: (n) => `${n} round${n === 1 ? '' : 's'}`, archived: 'Archived', hideCard: 'Put away', toMerge: 'To merge',
     empty: 'No tasks',
     approve: 'Approve & Create Task',
     feedback: 'Edit Feedback',
@@ -234,6 +248,20 @@ const i18n = {
     analyticsTotal: 'Total Tasks',
     analyticsSuccessRate: 'Success Rate',
     analyticsAvgDuration: 'Avg Duration',
+    discover: 'Find local projects',
+    searchTasks: 'Search tasks...',
+    statTotal: 'Done',
+    statWeek: 'This week',
+    statAvg: 'Avg time',
+    tipHome: 'Home',
+    tipPhone: 'Open on your phone',
+    tipTheme: 'Theme',
+    tipLang: 'Language',
+    tipBack: 'Back to projects',
+    tipSettings: 'Project settings',
+    tipImage: 'Add image',
+    tipSend: 'Send',
+    tipArchive: 'Archive old tasks',
     analyticsTotalCost: 'Total Cost',
     analyticsDailyTrend: 'Daily Trend',
     analyticsDone: 'Done',
@@ -271,6 +299,25 @@ const i18n = {
     urlsLoading: 'Detecting addresses…',
   },
 };
+
+// Tool-step lines ("读 a.py", "搜 TODO") come from the server in Chinese; in English
+// only their leading verb changes.
+const STEP_EN = [
+  [/^等后台任务（(\d+) 个）$/, (m) => `Waiting on ${m[1]} background task${m[1] === '1' ? '' : 's'}`],
+  [/^读网页$/, () => 'Read web page'], [/^整理待办$/, () => 'Update todos'], [/^改文件$/, () => 'Edit file'],
+  [/^向命令输入$/, () => 'Type into command'],
+  [/^搜网页 (.*)$/s, (m) => `Search web ${m[1]}`], [/^派子代理 (.*)$/s, (m) => `Subagent ${m[1]}`],
+  [/^用技能 (.*)$/s, (m) => `Skill ${m[1]}`],
+  [/^改 (.*)$/s, (m) => `Edit ${m[1]}`], [/^读 (.*)$/s, (m) => `Read ${m[1]}`], [/^搜 (.*)$/s, (m) => `Search ${m[1]}`],
+];
+function stepText(s) {
+  if (!s || state.lang !== 'en') return s;
+  for (const [re, fn] of STEP_EN) {
+    const m = re.exec(s);
+    if (m) return fn(m);
+  }
+  return s;
+}
 
 function t(key, ...args) {
   const val = i18n[state.lang]?.[key] || i18n.zh[key];
@@ -667,9 +714,9 @@ function renderBoard() {
       const archivedCount = state._stats?.archived || 0;
       const totalDone = allDone.length + archivedCount;
       html += `<div class="done-stats-card">
-        <div class="done-stat"><span class="done-stat-val">${totalDone}</span><span class="done-stat-label">总完成</span></div>
-        <div class="done-stat"><span class="done-stat-val">${thisWeek}</span><span class="done-stat-label">本周</span></div>
-        <div class="done-stat"><span class="done-stat-val">${fmtDur}</span><span class="done-stat-label">平均耗时</span></div>
+        <div class="done-stat"><span class="done-stat-val">${totalDone}</span><span class="done-stat-label">${t('statTotal')}</span></div>
+        <div class="done-stat"><span class="done-stat-val">${thisWeek}</span><span class="done-stat-label">${t('statWeek')}</span></div>
+        <div class="done-stat"><span class="done-stat-val">${fmtDur}</span><span class="done-stat-label">${t('statAvg')}</span></div>
       </div>`;
     }
 
@@ -1451,6 +1498,14 @@ function applyLanguage() {
   $('#labelProjectPath').textContent = t('projectPath');
   $('#pathHint').textContent = t('pathHint');
   $('#projectCancelBtn').textContent = t('cancel');
+  $('#discoverBtn').textContent = t('discover');
+  $('#searchInput').placeholder = t('searchTasks');
+  const tips = { homeLogo: 'tipHome', accessBtn: 'tipPhone', themeToggle: 'tipTheme', langToggle: 'tipLang',
+    backToProjects: 'tipBack', projectSettingsBtn: 'tipSettings', imageUploadBtn: 'tipImage', submitBtn: 'tipSend',
+    archiveBtn: 'tipArchive' };
+  Object.entries(tips).forEach(([id, key]) => { const el = document.getElementById(id); if (el) el.title = t(key); });
+  const accessTitle = document.querySelector('#accessPopover .project-urls-title');
+  if (accessTitle) accessTitle.textContent = t('tipPhone');
 
 
   $('#headerTitle').textContent = t('title');
@@ -3134,7 +3189,7 @@ function listRowSub(item) {
   } else if (item.todo && item.todo.total) {
     bits.push(`${item.todo.done}/${item.todo.total}${item.todo.cur ? ' · ' + escapeHtml(item.todo.cur) : ''}`);
   } else if (item.step) {
-    bits.push(`<span class="ov-mono">${escapeHtml(item.step)}</span>`);
+    bits.push(`<span class="ov-mono">${escapeHtml(stepText(item.step))}</span>`);
   }
   if (item.turns) bits.push(escapeHtml(t('rounds', item.turns)));
   const dur = item.active_ms ? formatListMs(item.active_ms) : '';
