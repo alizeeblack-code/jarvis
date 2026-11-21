@@ -37,6 +37,8 @@ def normalize_agent(value: str) -> str:
     value = (value or "").strip().lower()
     return "antigravity" if value == "gemini" else value
 BASE_PORT = 5200
+# Sent as the instruction when a message has images and no text
+IMAGES_ONLY_PROMPT = "See the attached image(s)."
 RESERVED_DEV_PORTS = frozenset({5100, 5180, 7890})
 
 # What a project's CLAUDE.md gets when it is added, in the UI's language at the time.

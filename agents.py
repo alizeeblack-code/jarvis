@@ -111,12 +111,12 @@ class AgentRunnersMixin:
         if resume:
             model, effort = session_settings(resume, "codex")
             cmd += ["resume", *resume_args("codex", model, effort), resume]
-            self._log_text(f"[resume] codex thread: {resume[:16]}... ({model or '默认模型'} · {effort or '默认 effort'})")
+            self._log_text(f"[resume] codex thread: {resume[:16]}... ({model or 'default model'} · {effort or 'default effort'})")
         cmd.append("-")                      # prompt from stdin
         if not skip and not self.task.get("plan_mode"):
             # workspace-write keeps .git read-only; the worker commits afterwards.
-            prompt += ("\n\n[说明] 你在沙箱里运行，.git 目录只读：只修改文件，不要执行 git commit，"
-                       "也不必记录提交失败；任务管理器会在结束后自动提交并合并。")
+            prompt += ("\n\n[Note] You run in a sandbox where .git is read-only: change files only, do not "
+                       "run git commit and do not report a failed commit; the task manager commits afterwards.")
         self._log_text(f"Running Codex in: {self.project_path}")
         await self._broadcast_status("running", f"Codex running in {self.project_path}")
 
@@ -241,7 +241,7 @@ class AgentRunnersMixin:
         if used > AGY_FRESH_TOKENS:
             # a long conversation is slow and costly to carry on, and the model starts
             # tripping over its own tool calls — carry a short note instead
-            self._log_text(f"[antigravity] 对话 {resume[:8]} 累计输入 {used / 1e6:.1f}M token，换新对话")
+            self._log_text(f"[antigravity] conversation {resume[:8]} has read {used / 1e6:.1f}M tokens; starting a new one")
             prompt = self._agy_carry_note(resume) + prompt
             resume = None
         models = usage_tracker.agy_models(choice)
@@ -257,7 +257,7 @@ class AgentRunnersMixin:
             except RuntimeError as e:
                 if self.cancelled or not models or not agy_quota_error(str(e)):
                     raise
-                self._log_text(f"[antigravity] {model} 额度用完，改用 {models[0]}")
+                self._log_text(f"[antigravity] {model} is out of quota; switching to {models[0]}")
 
     def _agy_carry_note(self, old_sid: str) -> str:
         """What a fresh conversation needs to know about the long one it replaces."""
@@ -268,8 +268,9 @@ class AgentRunnersMixin:
             ask = (t["description"].strip().splitlines() or [""])[0][:90]
             got = ((t.get("summary") or "").strip().splitlines() or [""])[0][:140]
             lines.append(f"- #{t['id']} {ask}" + (f" → {got}" if got else ""))
-        return ("（这是新开的对话：上一个对话太长，已换掉。工作目录和分支照旧，代码和提交记录都在；"
-                "需要细节就读代码、git log 和 PROGRESS.md。最近做过的任务：）\n"
+        return ("(This is a new conversation: the previous one grew too long. The working folder and branch "
+                "are the same, with all code and commits; for details read the code, git log and PROGRESS.md. "
+                "Recent tasks:)\n"
                 + "\n".join(lines) + "\n\n") if lines else ""
 
     async def _agy_once(self, prompt, conversation, model):
@@ -315,7 +316,7 @@ class AgentRunnersMixin:
         glitch = res and res.get("status") not in ("SUCCESS", None) and text \
             and agy_trailing_glitch(res, state.get("last_kind", ""))
         if glitch:
-            self._log_text("[antigravity] 回答写完后多了一个空的工具调用，按完成处理")
+            self._log_text("[antigravity] an empty tool call followed the finished answer; treating it as done")
         elif res and res.get("status") not in ("SUCCESS", None):
             why = res.get("error") or res.get("finished_reason") or res.get("status")
             raise RuntimeError(f"agy 没有完成：{str(why)[:300]}")

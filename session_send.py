@@ -9,6 +9,7 @@ same log, so the conversation view picks it up like any other turn:
 No git branch / commit here: this is the same as typing in the desktop app.
 """
 
+from config import IMAGES_ONLY_PROMPT
 import base64
 import json
 import os
@@ -50,7 +51,7 @@ def _agy_prompt(text: str, images) -> str:
     paths = _image_paths(images)
     if not paths:
         return text
-    base = text or "请查看附带的图片"
+    base = text or IMAGES_ONLY_PROMPT
     lines = "\n".join(f"- {p}" for p in paths)
     return f"{base}\n\n[Attached Images]\nThe user attached image files. Use the read_file tool to view them:\n{lines}"
 
@@ -99,7 +100,7 @@ def build_cmd(agent: str, sid: str, cwd: str, text: str, skip_perms: bool = Fals
         img_args = []
         for p in paths:
             img_args += ["-i", p]
-        prompt = text or ("请查看附带的图片" if img_args else "")
+        prompt = text or (IMAGES_ONLY_PROMPT if img_args else "")
         return cmd + ["resume", *img_args, *keep, sid, "-"], prompt
     if agent == "antigravity":
         dir_args = []
@@ -334,7 +335,7 @@ class SessionSender:
                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         except FileNotFoundError:
             raise ValueError("找不到命令 codex")
-        stdin_text = text or ("请查看附带的图片" if img_args else "")
+        stdin_text = text or (IMAGES_ONLY_PROMPT if img_args else "")
         proc.stdin.write(stdin_text.encode())
         proc.stdin.close()
         killer = threading.Timer(wait_s, proc.kill)
@@ -397,7 +398,7 @@ class SessionSender:
         time.sleep(1)                        # same pause the worker uses after initialize
         blocks = [b for p in _image_paths(images) if (b := _read_image_block(p))]
         if blocks:
-            content = [*blocks, {"type": "text", "text": text or "请查看附带的图片"}]
+            content = [*blocks, {"type": "text", "text": text or IMAGES_ONLY_PROMPT}]
         else:
             content = text
         w.write((json.dumps({"type": "user", "message": {"role": "user", "content": content}}) + "\n").encode())

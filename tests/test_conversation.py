@@ -647,7 +647,7 @@ def test_session_image_upload_and_send(tmp_path, monkeypatch):
 
         # build_cmd with images for codex & antigravity
         cmd_cx, stdin_cx = session_send.build_cmd("codex", "sid2", str(tmp_path), "", images=cleaned)
-        assert "-i" in cmd_cx and up["path"] in cmd_cx and stdin_cx == "请查看附带的图片"
+        assert "-i" in cmd_cx and up["path"] in cmd_cx and stdin_cx == "See the attached image(s)."
         cmd_ag, _ = session_send.build_cmd("antigravity", "c3", str(tmp_path), "看图", images=cleaned)
         assert "--add-dir" in cmd_ag and str(uploads_dir / "sessions") in cmd_ag
         assert "[Attached Images]" in cmd_ag[2]

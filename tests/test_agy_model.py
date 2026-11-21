@@ -142,7 +142,7 @@ def test_fresh_conversation_carries_recent_tasks():
     r.store, r.project_id, r.task_id = Store(), 1, 83
     note = r._agy_carry_note("old")
     assert "#81 默认收起 → 已改好（b8c85e4）" in note and "#82 额度显示整体剩余" in note
-    assert "#83" not in note and "#7" not in note and "上一个对话太长" in note
+    assert "#83" not in note and "#7" not in note and "the previous one grew too long" in note
 
 
 def test_context_levels_per_executor():

@@ -32,7 +32,7 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from access import AccessMiddleware, access_token, with_token
-from config import BASE_DIR, DATA_DIR, MAX_WORKERS, UPLOADS_DIR, task_agent
+from config import BASE_DIR, DATA_DIR, IMAGES_ONLY_PROMPT, MAX_WORKERS, UPLOADS_DIR, task_agent
 from overview import (ProjectResolver, build_overview, existing_session_ids, moved_on, session_page,
                       link_mcp_sessions, project_live, project_work_list)
 from session_send import SessionSender
@@ -512,7 +512,7 @@ async def _drain_direct_queue(sid: str) -> bool:
         return False
     item, _ = started
     if item.get("project_id"):
-        new = store.add_task(item["project_id"], item["text"] or "请查看附带的图片",
+        new = store.add_task(item["project_id"], item["text"] or IMAGES_ONLY_PROMPT,
                              images=item.get("images") or [], agent=item["agent"], extra={
             "status": "in_progress", "session_id": sid, "source": "session",
             "started_at": datetime.now().isoformat(), "rounds_before": rb})
@@ -1301,7 +1301,7 @@ async def send_to_session(sid: str, body: dict):
         extra = {"line": line, "rounds_before": rb}
         if not eff_sid.startswith("task:"):
             extra["session_id"] = eff_sid
-        new = store.add_task(p["id"], text or "请查看附带的图片", predecessor_id=pred["id"],
+        new = store.add_task(p["id"], text or IMAGES_ONLY_PROMPT, predecessor_id=pred["id"],
                              images=images, agent=t_agent, extra=extra)
         await ws_manager.broadcast({"type": "task_created", "task": new, "project_id": p["id"]})
         if not busy:
@@ -1334,7 +1334,7 @@ async def send_to_session(sid: str, body: dict):
     except ValueError as e:
         return {"error": str(e)}
     if p:   # the reply is a piece of work in the project too
-        new = store.add_task(p["id"], text or "请查看附带的图片", images=images, agent=s["agent"], extra={
+        new = store.add_task(p["id"], text or IMAGES_ONLY_PROMPT, images=images, agent=s["agent"], extra={
             "status": "in_progress", "session_id": sid, "source": "session",
             "started_at": datetime.now().isoformat(), "rounds_before": rb})
         if new:
@@ -1401,7 +1401,7 @@ async def fork_session(sid: str, body: dict):
                     and t["description"].strip() == text):
                 store.update_task(p["id"], t["id"], status="cancelled", error=None,
                                   summary=f"已复制成新会话 {new_sid[:8]} 继续")
-        task = store.add_task(p["id"], text or "请查看附带的图片", images=images, agent="codex", extra={
+        task = store.add_task(p["id"], text or IMAGES_ONLY_PROMPT, images=images, agent="codex", extra={
             "status": "in_progress", "session_id": new_sid, "source": "session",
             "started_at": datetime.now().isoformat(), "rounds_before": 0, "forked_from": sid})
         if task:
@@ -1746,7 +1746,7 @@ async def create_task(project_id: int, body: dict):
     images = _clean_images(body.get("images"))
     if not desc and not images:
         return {"error": "Description is required"}
-    task = store.add_task(project_id, desc or "请查看附带的图片",
+    task = store.add_task(project_id, desc or IMAGES_ONLY_PROMPT,
                           body.get("plan_mode", False),
                           body.get("predecessor_id"),
                           images=images,
@@ -1835,7 +1835,7 @@ async def revise_plan(project_id: int, task_id: int, body: dict = None):
     # Keep session_id so worker can --resume; reset plan fields
     updates = {
         "status": "pending",
-        "plan_feedback": feedback or "请查看附带的图片",
+        "plan_feedback": feedback or IMAGES_ONLY_PROMPT,
         "plan_content": None,
         "plan_questions": None,
         "plan_subtasks": None,
@@ -1970,12 +1970,12 @@ async def approve_plan(project_id: int, task_id: int, body: dict = None):
                 pred_id = index_to_task_id.get(dep_idx, task_id)
 
             desc = (
-                f"[来自 Plan #{task_id} 子任务 {st['index']}] "
+                f"[From Plan #{task_id}, subtask {st['index']}] "
                 f"{st['title']}\n\n{st['description']}"
             )
             if st.get("files"):
-                desc += f"\n\n涉及文件: {', '.join(st['files'])}"
-            desc += f"\n\n原始需求: {task['description']}{answers_text}"
+                desc += f"\n\nFiles: {', '.join(st['files'])}"
+            desc += f"\n\nOriginal request: {task['description']}{answers_text}"
 
             new_task = store.add_task(
                 project_id, desc, plan_mode=False,

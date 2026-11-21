@@ -1205,7 +1205,7 @@ function openTaskModal(taskId, taskObj = null) {
         : state.tasks.filter(t =>
             !t.plan_mode && (
               t.predecessor_id === task.id ||
-              (t.description || '').includes(`[来自 Plan #${task.id}`)
+              ((t.description || '').includes(`[来自 Plan #${task.id} `) || (t.description || '').includes(`[From Plan #${task.id},`))
             ));
       if (successors.length > 0) {
         const sLabels = state.lang === 'en'
@@ -1225,7 +1225,7 @@ function openTaskModal(taskId, taskObj = null) {
       if (!adoptedSubtasks && successors.length > 0) {
         const inferredIndices = new Set();
         successors.forEach(s => {
-          const m = (s.description || '').match(/\[来自 Plan #\d+ 子任务 (\d+)\]/);
+          const m = (s.description || '').match(/\[(?:来自 Plan #\d+ 子任务|From Plan #\d+, subtask) (\d+)\]/);
           if (m) inferredIndices.add(parseInt(m[1]));
         });
         if (inferredIndices.size > 0) {

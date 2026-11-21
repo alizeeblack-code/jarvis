@@ -191,58 +191,58 @@ class WorkerProcess(AgentRunnersMixin):
         if has_predecessor_session and not self.task.get("plan_mode"):
             pred_id = self.task.get("predecessor_id")
             return (
-                f"继续工作（基于任务 #{pred_id} 的上下文）。\n\n"
-                f"新任务: {desc}{image_section}"
+                f"Continue from the context of task #{pred_id}.\n\n"
+                f"New task: {desc}{image_section}"
             )
 
         if self.task.get("plan_mode"):
             plan_feedback = self.task.get("plan_feedback")
             if plan_feedback and self.task.get("session_id"):
                 return (
-                    f"用户对你之前的方案有以下反馈，请根据反馈修改计划：\n\n"
-                    f"反馈: {plan_feedback}{image_section}\n\n"
-                    f"请重新输出完整的修改后的 JSON 计划（格式与之前相同）。"
+                    f"The user has feedback on your plan. Revise the plan accordingly.\n\n"
+                    f"Feedback: {plan_feedback}{image_section}\n\n"
+                    f"Output the complete revised JSON plan again (same format as before)."
                 )
             return (
-                f"[Plan Mode] 分析任务并创建实施计划。不要动手实现，只做规划。\n\n"
-                f"任务: {desc}{image_section}\n\n"
-                f"请先用自然语言描述你的分析和方案，然后在最后输出一个 JSON 代码块，格式如下：\n\n"
+                f"[Plan Mode] Analyze the task and write an implementation plan. Plan only; do not implement.\n\n"
+                f"Task: {desc}{image_section}\n\n"
+                f"First describe your analysis and approach in prose, then end with one JSON code block in this format:\n\n"
                 f"```json\n"
                 f'{{\n'
-                f'  "summary": "概述：做什么、为什么做",\n'
+                f'  "summary": "Overview: what to do and why",\n'
                 f'  "subtasks": [\n'
                 f'    {{\n'
-                f'      "title": "子任务标题",\n'
-                f'      "description": "详细描述，足够让另一个 Claude Code 独立执行",\n'
+                f'      "title": "Subtask title",\n'
+                f'      "description": "Enough detail for another Claude Code to do it on its own",\n'
                 f'      "files": ["file1.py", "file2.js"],\n'
                 f'      "depends_on": []\n'
                 f'    }},\n'
                 f'    {{\n'
-                f'      "title": "第二个子任务",\n'
-                f'      "description": "描述",\n'
+                f'      "title": "Second subtask",\n'
+                f'      "description": "Description",\n'
                 f'      "files": [],\n'
                 f'      "depends_on": [1]\n'
                 f'    }}\n'
                 f'  ],\n'
                 f'  "questions": [\n'
                 f'    {{\n'
-                f'      "question": "需要确认的问题",\n'
-                f'      "suggestion": "你的建议（可选）"\n'
+                f'      "question": "Something to confirm",\n'
+                f'      "suggestion": "Your suggestion (optional)"\n'
                 f'    }}\n'
                 f'  ],\n'
-                f'  "risks": ["风险1", "风险2"]\n'
+                f'  "risks": ["Risk 1", "Risk 2"]\n'
                 f'}}\n'
                 f"```\n\n"
-                f"要求:\n"
-                f"- depends_on 是子任务序号数组（从 1 开始），空数组表示无依赖\n"
-                f"- 子任务粒度适中（每个 1-3 个文件改动）\n"
-                f"- 描述要详细，让另一个 Claude Code 能独立执行"
+                f"Rules:\n"
+                f"- depends_on lists subtask numbers (from 1); an empty list means no dependencies\n"
+                f"- keep subtasks small (1-3 files each)\n"
+                f"- describe each one in enough detail for another Claude Code to do it alone"
             )
         if not os.path.exists(os.path.join(self.project_path, "PROGRESS.md")):
             return desc + image_section      # folder registered without Jarvis docs
         return (desc + image_section +
-                "\n\n[完成后] 如果遇到了问题或有值得记录的经验，"
-                "请追加到 PROGRESS.md（包含问题、解决方式、commit ID）。")
+                "\n\n[When done] If you ran into a problem or learned something worth keeping, "
+                "append it to PROGRESS.md (the problem, how it was solved, the commit ID).")
 
     # ── Claude Code execution ───────────────────────────────────────────
 

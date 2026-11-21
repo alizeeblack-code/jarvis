@@ -43,7 +43,7 @@ while i < len(args):
 BASE_URL = f"http://{MANAGER_HOST}:{MANAGER_PORT}"
 
 mcp = FastMCP("TaskManager-Remote",
-              instructions=f"远程任务管理工具。连接到 {BASE_URL}")
+              instructions=f"Task manager (remote), connected to {BASE_URL}")
 
 
 def _api(method: str, path: str, data: dict = None) -> dict:
@@ -66,15 +66,15 @@ def _api(method: str, path: str, data: dict = None) -> dict:
 
 @mcp.tool()
 def list_projects() -> str:
-    """列出所有项目及其任务统计"""
+    """List all projects with their task counts."""
     return json.dumps(_api("GET", "/api/projects"), ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
 def list_tasks(project_id: int = 0, status: str = "") -> str:
-    """列出项目的任务列表。可选按状态筛选"""
+    """List a project's tasks, optionally by status."""
     if not project_id:
-        return json.dumps({"error": "请指定 project_id"})
+        return json.dumps({"error": "Pass project_id"})
     result = _api("GET", f"/api/projects/{project_id}/tasks")
     tasks = result.get("tasks", [])
     if status:
@@ -89,9 +89,9 @@ def list_tasks(project_id: int = 0, status: str = "") -> str:
 
 @mcp.tool()
 def get_task(task_id: int, project_id: int = 0) -> str:
-    """获取任务详情"""
+    """Get a task's details."""
     if not project_id:
-        return json.dumps({"error": "请指定 project_id"})
+        return json.dumps({"error": "Pass project_id"})
     tasks = _api("GET", f"/api/projects/{project_id}/tasks").get("tasks", [])
     task = next((t for t in tasks if t["id"] == task_id), None)
     if not task:
@@ -106,28 +106,28 @@ def get_task(task_id: int, project_id: int = 0) -> str:
 
 @mcp.tool()
 def get_task_logs(task_id: int, project_id: int = 0, limit: int = 50) -> str:
-    """获取任务运行日志"""
+    """Get a task's run log."""
     if not project_id:
-        return json.dumps({"error": "请指定 project_id"})
+        return json.dumps({"error": "Pass project_id"})
     result = _api("GET", f"/api/projects/{project_id}/tasks/{task_id}/logs?limit={limit}")
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
 def claim_next(project_id: int = 0, model: str = "") -> str:
-    """领取下一个待执行的任务"""
+    """Claim the next pending task."""
     if not project_id:
-        return json.dumps({"error": "请指定 project_id"})
+        return json.dumps({"error": "Pass project_id"})
     result = _api("POST", f"/api/projects/{project_id}/claim-next")
     task = result.get("task")
     if not task:
-        return json.dumps({"task": None, "message": "没有待执行的任务"})
+        return json.dumps({"task": None, "message": "No pending tasks"})
     # Model filter (server-side claim-next doesn't filter by model for HTTP API)
     task_model = task.get("model", "")
     if model and task_model and task_model != model:
         # Unclaim: set back to pending
         _api("POST", f"/api/projects/{project_id}/tasks/{task['id']}/reopen")
-        return json.dumps({"task": None, "message": f"任务 #{task['id']} 指定给 {task_model}，跳过"})
+        return json.dumps({"task": None, "message": f"Task #{task['id']} is for {task_model}; skipped"})
     return json.dumps({
         "project_id": project_id,
         "task": {
@@ -139,21 +139,20 @@ def claim_next(project_id: int = 0, model: str = "") -> str:
             "images": task.get("images", []),
         },
         "instructions": (
-            f"请执行此任务。执行过程中请用 log_progress(task_id={task['id']}, message='...') "
-            f"汇报关键进展。"
-            + (f"\n\n这是 Plan Mode 任务：请只做规划不实现。完成后调用 "
-               f"submit_plan(task_id={task['id']}, plan_content='...') 提交。"
+            f"Work on this task. Report key progress with log_progress(task_id={task['id']}, message='...')."
+            + (f"\n\nThis is a Plan Mode task: plan only, do not implement. When done, call "
+               f"submit_plan(task_id={task['id']}, plan_content='...')."
                if task.get("plan_mode") else
-               f"\n完成后用 complete_task(task_id={task['id']}, summary='...') 标记完成。")
+               f"\nWhen done, call complete_task(task_id={task['id']}, summary='...').")
         )
     }, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
 def complete_task(task_id: int, summary: str, project_id: int = 0) -> str:
-    """完成任务并附带工作总结"""
+    """Complete a task with a summary of the work."""
     if not project_id:
-        return json.dumps({"error": "请指定 project_id"})
+        return json.dumps({"error": "Pass project_id"})
     result = _api("POST", f"/api/projects/{project_id}/tasks/{task_id}/complete",
                   {"summary": summary})
     return json.dumps(result, ensure_ascii=False)
@@ -161,9 +160,9 @@ def complete_task(task_id: int, summary: str, project_id: int = 0) -> str:
 
 @mcp.tool()
 def fail_task(task_id: int, error: str, project_id: int = 0) -> str:
-    """标记任务失败"""
+    """Mark a task as failed."""
     if not project_id:
-        return json.dumps({"error": "请指定 project_id"})
+        return json.dumps({"error": "Pass project_id"})
     # Use update via reopen + fail pattern
     _api("POST", f"/api/projects/{project_id}/tasks/{task_id}/retry")
     result = _api("POST", f"/api/projects/{project_id}/tasks/{task_id}/complete",
@@ -175,9 +174,9 @@ def fail_task(task_id: int, error: str, project_id: int = 0) -> str:
 def add_task(description: str, plan_mode: bool = False,
              predecessor_id: int = 0, project_id: int = 0,
              model: str = "") -> str:
-    """添加新任务"""
+    """Add a task."""
     if not project_id:
-        return json.dumps({"error": "请指定 project_id"})
+        return json.dumps({"error": "Pass project_id"})
     result = _api("POST", f"/api/projects/{project_id}/tasks", {
         "description": description,
         "plan_mode": plan_mode,
@@ -189,9 +188,9 @@ def add_task(description: str, plan_mode: bool = False,
 
 @mcp.tool()
 def log_progress(task_id: int, message: str, project_id: int = 0) -> str:
-    """汇报任务进展（实时推送到 Web Manager）"""
+    """Report progress on a task (shown live in the web manager)."""
     if not project_id:
-        return json.dumps({"error": "请指定 project_id"})
+        return json.dumps({"error": "Pass project_id"})
     result = _api("POST", f"/api/projects/{project_id}/tasks/{task_id}/log",
                   {"message": message, "type": "message"})
     return json.dumps(result, ensure_ascii=False)
@@ -199,9 +198,9 @@ def log_progress(task_id: int, message: str, project_id: int = 0) -> str:
 
 @mcp.tool()
 def submit_plan(task_id: int, plan_content: str, project_id: int = 0) -> str:
-    """提交 Plan Mode 任务的计划内容"""
+    """Submit the plan of a Plan Mode task."""
     if not project_id:
-        return json.dumps({"error": "请指定 project_id"})
+        return json.dumps({"error": "Pass project_id"})
     # Store plan content via the revise endpoint (sets status back to review)
     # Actually we need a dedicated endpoint, for now use complete with plan marker
     result = _api("POST", f"/api/projects/{project_id}/tasks/{task_id}/log",

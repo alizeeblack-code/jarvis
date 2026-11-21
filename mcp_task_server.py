@@ -55,8 +55,8 @@ def _post_log(pid: int, task_id: int, payload: dict) -> None:
     # never through an HTTP proxy: it is this machine
     urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=3)
 mcp = FastMCP("TaskManager",
-              instructions="任务管理工具。用于领取、执行、完成项目任务。"
-                           "大多数工具的 project_id 可省略，会自动根据当前工作目录匹配。")
+              instructions="Task manager: claim, work on and complete project tasks. "
+                           "Most tools can omit project_id; it is matched from the current folder.")
 
 
 def _resolve_project(project_id: int = 0) -> int:
@@ -75,7 +75,7 @@ def _resolve_project(project_id: int = 0) -> int:
 
 @mcp.tool()
 def list_projects() -> str:
-    """列出所有项目及其任务统计"""
+    """List all projects with their task counts."""
     data = store._read()
     cwd = os.getcwd()
     projects = []
@@ -98,10 +98,10 @@ def list_projects() -> str:
 
 @mcp.tool()
 def list_tasks(project_id: int = 0, status: str = "") -> str:
-    """列出项目的任务列表。project_id 可省略（自动匹配当前目录）。可选按状态筛选"""
+    """List a project's tasks, optionally by status. project_id can be omitted (matched from the current folder)."""
     pid = _resolve_project(project_id)
     if not pid:
-        return json.dumps({"error": "无法自动匹配项目，请指定 project_id"})
+        return json.dumps({"error": "No project matches the current folder; pass project_id"})
     tasks = store.get_tasks(pid)
     if status:
         tasks = [t for t in tasks if t.get("status") == status]
@@ -120,10 +120,10 @@ def list_tasks(project_id: int = 0, status: str = "") -> str:
 
 @mcp.tool()
 def get_task(task_id: int, project_id: int = 0) -> str:
-    """获取任务详情。project_id 可省略"""
+    """Get a task's details. project_id can be omitted."""
     pid = _resolve_project(project_id)
     if not pid:
-        return json.dumps({"error": "无法自动匹配项目，请指定 project_id"})
+        return json.dumps({"error": "No project matches the current folder; pass project_id"})
     task = store.get_task(pid, task_id)
     if not task:
         return json.dumps({"error": "Task not found"})
@@ -135,10 +135,10 @@ def get_task(task_id: int, project_id: int = 0) -> str:
 
 @mcp.tool()
 def get_task_logs(task_id: int, project_id: int = 0, limit: int = 50) -> str:
-    """获取任务的运行日志。默认返回最近 50 条。"""
+    """Get a task's run log (the last 50 entries by default)."""
     pid = _resolve_project(project_id)
     if not pid:
-        return json.dumps({"error": "无法自动匹配项目，请指定 project_id"})
+        return json.dumps({"error": "No project matches the current folder; pass project_id"})
     logs = store.get_logs(pid, task_id, limit=limit)
     total = store.get_log_count(pid, task_id)
     return json.dumps({
@@ -151,13 +151,13 @@ def get_task_logs(task_id: int, project_id: int = 0, limit: int = 50) -> str:
 
 @mcp.tool()
 def claim_next(project_id: int = 0, model: str = "") -> str:
-    """领取下一个待执行的任务。model＝领取者：claude / codex / antigravity（旧值 gemini 等同 antigravity）/ ""(任意)。只领 pending；Todo 里的任务要先在网页上派出去"""
+    """Claim the next pending task. model = who claims it: claude / codex / antigravity (gemini means antigravity) / "" (any). Only pending tasks; tasks in Todo must be handed out on the web page first."""
     pid = _resolve_project(project_id)
     if not pid:
-        return json.dumps({"error": "无法自动匹配项目，请指定 project_id"})
+        return json.dumps({"error": "No project matches the current folder; pass project_id"})
     task = store.claim_next_task(pid, worker_id="mcp-worker", model=model)
     if not task:
-        return json.dumps({"task": None, "message": "没有待执行的任务"})
+        return json.dumps({"task": None, "message": "No pending tasks"})
     return json.dumps({
         "project_id": pid,
         "task": {
@@ -168,24 +168,24 @@ def claim_next(project_id: int = 0, model: str = "") -> str:
             "images": task.get("images", []),
         },
         "instructions": (
-            f"请执行此任务。执行过程中请用 log_progress(task_id={task['id']}, message='...') "
-            f"汇报关键进展（分析结论、修改内容、commit ID 等）。"
-            + (f"\n\n这是 Plan Mode 任务：请只做规划不实现。输出计划后调用 "
-               f"submit_plan(task_id={task['id']}, plan_content='...计划全文...') 提交。"
-               f"\n计划格式要求：## 概述 / ## 子任务（带依赖） / ## 问题与澄清 / ## 风险"
+            f"Work on this task. Report key progress with log_progress(task_id={task['id']}, message='...') "
+            f"(findings, what you changed, commit IDs)."
+            + (f"\n\nThis is a Plan Mode task: plan only, do not implement. When the plan is ready, call "
+               f"submit_plan(task_id={task['id']}, plan_content='...the full plan...')."
+               f"\nPlan sections: ## Overview / ## Subtasks (with dependencies) / ## Questions / ## Risks"
                if task.get("plan_mode") else
-               f"\n完成后用 complete_task(task_id={task['id']}, summary='...') 标记完成。")
+               f"\nWhen done, call complete_task(task_id={task['id']}, summary='...').")
         )
     }, ensure_ascii=False, indent=2)
 
 
 @mcp.tool()
 def complete_task(task_id: int, summary: str, project_id: int = 0) -> str:
-    """完成任务并附带工作总结。project_id 可省略。summary 格式：问题/实现/改动文件/commit"""
+    """Complete a task with a summary of the work. project_id can be omitted. Summary: problem / what was done / files changed / commit."""
     from datetime import datetime
     pid = _resolve_project(project_id)
     if not pid:
-        return json.dumps({"error": "无法自动匹配项目，请指定 project_id"})
+        return json.dumps({"error": "No project matches the current folder; pass project_id"})
     task = store.get_task(pid, task_id)
     if not task:
         return json.dumps({"error": "Task not found"})
@@ -198,10 +198,10 @@ def complete_task(task_id: int, summary: str, project_id: int = 0) -> str:
 
 @mcp.tool()
 def fail_task(task_id: int, error: str, project_id: int = 0) -> str:
-    """标记任务失败。project_id 可省略"""
+    """Mark a task as failed. project_id can be omitted."""
     pid = _resolve_project(project_id)
     if not pid:
-        return json.dumps({"error": "无法自动匹配项目，请指定 project_id"})
+        return json.dumps({"error": "No project matches the current folder; pass project_id"})
     task = store.get_task(pid, task_id)
     if not task:
         return json.dumps({"error": "Task not found"})
@@ -213,10 +213,10 @@ def fail_task(task_id: int, error: str, project_id: int = 0) -> str:
 def add_task(description: str, plan_mode: bool = False,
                    predecessor_id: int = 0, project_id: int = 0,
                    model: str = "") -> str:
-    """添加新任务。model＝执行者：claude / codex / antigravity / me（我自己）/ ""（按项目设置，默认先进 Todo）。plan_mode=true 时只规划不实现"""
+    """Add a task. model = who does it: claude / codex / antigravity / me (the user) / "" (project setting; Todo by default). plan_mode=true plans without implementing."""
     pid = _resolve_project(project_id)
     if not pid:
-        return json.dumps({"error": "无法自动匹配项目，请指定 project_id"})
+        return json.dumps({"error": "No project matches the current folder; pass project_id"})
     task = store.add_task(
         pid, description,
         plan_mode=plan_mode,
@@ -237,11 +237,11 @@ def add_task(description: str, plan_mode: bool = False,
 
 @mcp.tool()
 def log_progress(task_id: int, message: str, project_id: int = 0) -> str:
-    """汇报任务进展。在执行任务的关键步骤时调用，让 Web Manager 能实时看到进度。
-    例如：读完代码后汇报分析结论、修改文件后汇报改了什么、提交代码后汇报 commit。"""
+    """Report progress on a task; the web manager shows it live. Call it at key steps:
+    findings after reading the code, what changed after editing, the commit ID after committing."""
     pid = _resolve_project(project_id)
     if not pid:
-        return json.dumps({"error": "无法自动匹配项目，请指定 project_id"})
+        return json.dumps({"error": "No project matches the current folder; pass project_id"})
     # Push via HTTP API so WebSocket broadcasts to web UI in real-time
     try:
         _post_log(pid, task_id, {"message": message, "type": "message"})
@@ -253,13 +253,13 @@ def log_progress(task_id: int, message: str, project_id: int = 0) -> str:
 
 @mcp.tool()
 def submit_plan(task_id: int, plan_content: str, project_id: int = 0) -> str:
-    """提交 Plan Mode 任务的计划内容，设置状态为待 Review。
-    plan_content 应包含：概述、子任务列表（带依赖关系）、问题与澄清、风险。
-    用户在 Web 界面审批后会自动创建子任务。"""
+    """Submit the plan of a Plan Mode task; the task goes to Review.
+    plan_content should cover: overview, subtasks (with dependencies), questions, risks.
+    Subtasks are created once the user approves the plan on the web page."""
     from utils import extract_plan_json, extract_questions, extract_subtasks
     pid = _resolve_project(project_id)
     if not pid:
-        return json.dumps({"error": "无法自动匹配项目，请指定 project_id"})
+        return json.dumps({"error": "No project matches the current folder; pass project_id"})
     task = store.get_task(pid, task_id)
     if not task:
         return json.dumps({"error": "Task not found"})
@@ -281,7 +281,7 @@ def submit_plan(task_id: int, plan_content: str, project_id: int = 0) -> str:
 
     # Notify Web UI via WebSocket
     try:
-        _post_log(pid, task_id, {"message": f"Plan 已提交，等待审批（{len(subtasks)} 个子任务，{len(questions)} 个问题）",
+        _post_log(pid, task_id, {"message": f"Plan submitted, waiting for approval ({len(subtasks)} subtasks, {len(questions)} questions)",
                                  "type": "result"})
     except Exception:
         pass
