@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# Runtime data: everything under data/ (tasks, session index, prefs, agy logs…) and logs/
+data/*
+!data/.gitkeep
+logs/
+
+# Uploads (user-attached images)
+data/uploads/
+
+# Task logs (JSONL files, runtime data)
+data/task_logs/
+
+# Logs & worktrees (runtime directories)
+logs/*.log
+worktrees/*/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# This instance's own notes (see CLAUDE.md: 本机专属的说明)
+CLAUDE.local.md
+PROGRESS.md
+
+# Claude Code local settings (user-specific)
+.claude/settings.local.json
+.claude/launch.json
+
+# Claude Code runtime lock
+.claude/scheduled_tasks.lock
