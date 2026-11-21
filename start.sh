@@ -36,11 +36,6 @@ cd "$SCRIPT_DIR"
 # Ensure data directories exist
 mkdir -p data worktrees logs
 
-# Initialize dev-tasks.json if missing
-if [ ! -f data/dev-tasks.json ]; then
-  echo '{"next_id": 1, "tasks": []}' > data/dev-tasks.json
-fi
-
 # Check Python dependencies
 if ! python3 -c "import fastapi" 2>/dev/null; then
   echo "Installing dependencies..."
