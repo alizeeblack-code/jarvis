@@ -2,36 +2,54 @@
 
 [中文](README.zh-CN.md)
 
-A local web dashboard for running several coding agents in parallel —
-[Claude Code](https://docs.anthropic.com/en/docs/claude-code), OpenAI Codex CLI and
-Google Antigravity (`agy`) — and for keeping track of every agent session on your
-machine, from a desktop browser or your phone.
+**Every coding agent on your machine in one place — and the one waiting for you, answered from your desk or your phone.**
 
-It is a single Python process (FastAPI) with a plain HTML/JS front end. No database,
-no build step: state lives in JSON files under `data/`.
+![Overview: today's activity, what is running and what is waiting for you](docs/images/overview.png)
 
-> The interface is mainly in Chinese. The 中/EN toggle in the header translates part of it.
+With Claude Code, Codex and Antigravity sessions running side by side, the hard part
+is no longer the code; it is noticing which session has stopped to ask you something.
+Jarvis reads the session logs these tools already keep, sorts them by who has to act
+next, and hands out new tasks that each run on their own git branch.
+
+One Python process (FastAPI) and a plain HTML/JS page: no database, no build step.
+The interface is mainly in Chinese; the 中/EN toggle in the header translates part of it.
 
 ## What it does
 
-- **Overview of all sessions on this machine.** Reads the logs that Claude Code
-  (`~/.claude/projects`), Codex (`~/.codex/sessions`) and Antigravity write, groups
-  them by project, and shows what is running, what is waiting for you, what just
-  finished, and how close each session is to its context limit. Read-only: it
-  never edits those logs.
-- **Continue any session from the browser.** Open a session, read the conversation
-  (images included), reply, interrupt, queue a follow-up, change effort, archive it.
-- **Task queue per project.** Write a task, pick the agent (Claude / Codex /
-  Antigravity) and send it. Each task runs headless in its own git worktree on a
-  `task-<n>` branch, so several can run at once without touching your checkout.
-  Follow-up tasks resume the same session.
-- **Board.** One card per line of work, in columns by who has to act next:
-  Todo / Queued / Running / Waiting for you / Done.
-- **Merge from the UI.** A finished branch can be merged into `main` after the
-  project's test command passes and `git merge-tree` reports no conflicts.
-- **Usage.** Remaining Claude, Codex and Antigravity quota at a glance.
-- **MCP task tools.** `mcp_task_server.py` lets an agent claim tasks, log progress
-  and complete them (`claim_next`, `log_progress`, `complete_task`, …).
+- **Every session in one view.** Claude Code, Codex and Antigravity, grouped by
+  project: running, waiting for you, just finished, close to the context limit.
+  Read-only: it never edits their logs.
+- **Answer from anywhere.** Open a session, read it, reply, interrupt it or queue
+  the next instruction, on the phone too.
+- **Tasks in parallel.** Each task runs headless in its own git worktree and branch;
+  merge it from the page once the tests pass.
+- **A board by who acts next.** Todo / Queued / Running / Waiting for you / Done.
+- **Quota at a glance.** What is left of your Claude, Codex and Antigravity limits.
+
+![Project board: one card per line of work](docs/images/board.png)
+
+<p>
+  <img src="docs/images/session.png" width="68%" alt="Session panel: a session asking which fix to make">
+  <img src="docs/images/mobile.png" width="21%" alt="The overview on a phone">
+</p>
+
+<sub>Screenshots use made-up demo projects.</sub>
+
+## How it works
+
+```mermaid
+flowchart LR
+    you(["You<br/>desktop or phone"]) -- "new task" --> J["Jarvis"]
+    J -- "branch task-n<br/>in its own worktree" --> A["Claude Code / Codex / Antigravity"]
+    A -- "writes" --> L[("Session logs<br/>~/.claude · ~/.codex · ~/.gemini")]
+    L -- "read-only" --> J
+    J -- "waiting for you" --> you
+    A -- "commits" --> B["task branch"]
+    B -- "tests pass, no conflicts" --> M["main"]
+```
+
+Sessions you start yourself (terminal, desktop app) show up the same way: Jarvis
+only reads their logs, and replies you send from the page resume them.
 
 ## Requirements
 
@@ -160,6 +178,15 @@ own CLI is set to.
 ```bash
 python3 -m pytest tests -q
 ```
+
+## Acknowledgements
+
+- [Agent Deck](https://github.com/asheshgoplani/agent-deck): the overview of every
+  agent session and the progress pills on its cards borrow from it.
+- Nautilus Spiral: the spiral day clock on the overview.
+- 提高 Agentic Coding 吞吐量的 10 个阶段 ("10 stages to higher agentic coding
+  throughput"): the idea of many agents working in parallel, one task each, that
+  this project started from.
 
 ## License
 

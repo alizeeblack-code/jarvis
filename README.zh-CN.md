@@ -2,26 +2,46 @@
 
 [English](README.md)
 
-在本机跑的网页控制台，用来并行调度多个编程 agent，并且在电脑浏览器或手机上随时看到本机所有 agent 会话的状态。支持的 agent 有
-[Claude Code](https://docs.anthropic.com/en/docs/claude-code)、OpenAI Codex CLI 和 Google Antigravity（`agy`）。
+**本机所有编程 agent 一屏看全；哪个在等你回话，电脑上、手机上都能直接回。**
 
-整个程序就是一个 Python 进程（FastAPI），前端是原生 HTML/JS。没有数据库，也不需要构建，状态都存在 `data/` 下的 JSON 文件里。
+![首页总览：今天的工作量、在跑的、等你的](docs/images/overview.png)
+
+Claude Code、Codex、Antigravity 的会话同时开着好几个时，难的已经不是写代码，而是及时发现哪个会话停下来在等你回答。
+Jarvis 读取这些工具本来就会写的会话日志，按「现在该谁动」排好；新任务派出去，各自在独立的 git 分支上跑。
+
+整个程序就是一个 Python 进程（FastAPI）加一个原生 HTML/JS 页面：没有数据库，不需要构建。
 
 ## 能做什么
 
-- **本机所有会话的总览**
-  - 读取 Claude Code（`~/.claude/projects`）、Codex（`~/.codex/sessions`）和 Antigravity 写下的日志，按项目归类。
-  - 显示哪些在跑、哪些在等你、哪些刚做完，以及每个会话离上下文上限还有多远。
-  - 只读，不会改动这些日志。
-- **在网页上续写任意会话**：看对话（含图片）、回复、插话打断、排队下一条、调 effort、归档。
-- **按项目的任务队列**
-  - 写一条任务、选执行者（Claude / Codex / Antigravity），发出去就会无人值守地运行。
-  - 每个任务在独立的 git worktree 里跑，分支是 `task-<n>`，所以可以同时跑好几个，也不会动你当前的工作目录。
-  - 续接任务沿用同一个会话。
-- **看板**：一条工作线一张卡，按「现在该谁动」分成 Todo / 排队 / 进行中 / 等你 / 已完成五列。
-- **在界面里合并**：任务分支做完后，先跑项目的测试命令，再用 `git merge-tree` 确认没有冲突，然后合并到 `main`。
-- **用量**：Claude、Codex、Antigravity 的剩余额度一眼可见。
-- **MCP 任务工具**：通过 `mcp_task_server.py`，agent 可以自己领任务、汇报进度、标记完成（`claim_next`、`log_progress`、`complete_task` 等）。
+- **所有会话一屏看全**：Claude Code、Codex、Antigravity 按项目归类，在跑、等你、刚做完、快到上下文上限一眼可见。只读，不改它们的日志。
+- **在哪都能回**：打开会话就能看对话、回复、打断，或排队下一条指令，手机上也一样。
+- **任务并行**：每个任务在自己的 git worktree 和分支里无人值守地跑，测试通过后在页面上一键合并。
+- **按「该谁动」排的看板**：Todo / 排队 / 进行中 / 等你 / 已完成。
+- **额度一目了然**：Claude、Codex、Antigravity 各还剩多少。
+
+![项目看板：一条工作线一张卡](docs/images/board.png)
+
+<p>
+  <img src="docs/images/session.png" width="68%" alt="会话面板：会话在问你选哪种改法">
+  <img src="docs/images/mobile.png" width="21%" alt="手机上的首页">
+</p>
+
+<sub>截图里是虚构的演示项目。</sub>
+
+## 工作方式
+
+```mermaid
+flowchart LR
+    you(["你<br/>电脑或手机"]) -- "派任务" --> J["Jarvis"]
+    J -- "在独立工作区开分支 task-n" --> A["Claude Code / Codex / Antigravity"]
+    A -- "写日志" --> L[("会话日志<br/>~/.claude · ~/.codex · ~/.gemini")]
+    L -- "只读" --> J
+    J -- "等你回话" --> you
+    A -- "提交" --> B["任务分支"]
+    B -- "测试通过、无冲突" --> M["main"]
+```
+
+你自己开的会话（终端、桌面版）也一样显示：Jarvis 只读它们的日志，你在页面上发的回复会接着这个会话继续。
 
 ## 环境要求
 
@@ -140,6 +160,12 @@ Antigravity 任务可选的模型内置在 `usage.py` 里。要改的话，新�
 ```bash
 python3 -m pytest tests -q
 ```
+
+## 致谢
+
+- [Agent Deck](https://github.com/asheshgoplani/agent-deck)：本机所有 agent 会话的总览、卡片上的进度胶囊借鉴了它。
+- Nautilus Spiral：首页的螺旋表盘。
+- 《提高 Agentic Coding 吞吐量的 10 个阶段》：多个 agent 并行、各领一个任务的思路，这个项目由此起步。
 
 ## 许可证
 
