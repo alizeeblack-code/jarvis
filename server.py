@@ -32,12 +32,14 @@ from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from access import AccessMiddleware, access_token, with_token
+from desk import desk_usage, desk_view
+import reveal
 from config import BASE_DIR, DATA_DIR, IMAGES_ONLY_PROMPT, MAX_WORKERS, UPLOADS_DIR, task_agent
 from overview import (ProjectResolver, build_overview, existing_session_ids, moved_on, session_page,
                       link_mcp_sessions, project_live, project_work_list)
 from session_send import SessionSender
 from sessions import (CLAUDE_PROJECTS, CODEX_HOME, QUIET_WINDOW_MS, SessionIndex, context_level,
-                      session_state)
+                      headless, session_state)
 from transcript import TranscriptReader, find_log, image_at, session_settings, tool_cat
 from usage import tracker as usage_tracker
 import gitflow
@@ -549,6 +551,33 @@ def linked_projects(sessions=None) -> list:
                              session_index.sessions() if sessions is None else sessions)
 
 
+CLAUDE_USAGE_EVERY_MS = 30 * 60 * 1000
+
+
+def claude_used_since(at_ms: float, sessions: list) -> bool:
+    """Has any Claude session on this machine done something since `at_ms`? Only use spends
+    quota, so with none the last reading still holds (a window past its reset counts as fresh)."""
+    return any(x.get("agent", "claude") == "claude" and (x.get("last_at") or 0) > at_ms for x in sessions)
+
+
+async def _claude_usage_loop():
+    """Keep Claude's quota at most half an hour old for the desk display, but only when Claude
+    was used since it was last read: then send the tiny probe turn /api/usage/refresh sends
+    (a real Haiku request, so never while nobody is using Claude). Runs Jarvis starts read
+    it for free."""
+    while True:
+        await asyncio.sleep(60)
+        try:
+            at = ((usage_tracker.snapshot(False).get("claude") or {}).get("at") or 0)
+            if time.time() * 1000 - at > CLAUDE_USAGE_EVERY_MS and claude_used_since(at, session_index.sessions()):
+                err = await asyncio.to_thread(usage_tracker.probe_claude)
+                if err:
+                    print(f"[usage] Claude quota probe failed: {err}")
+                    await asyncio.sleep(CLAUDE_USAGE_EVERY_MS / 1000)   # don't retry every minute
+        except Exception as e:
+            print(f"[usage] Claude quota probe failed: {e}")
+
+
 async def _session_scan_loop():
     """Re-read appended Claude session logs; tell open pages when something changed."""
     while True:
@@ -576,8 +605,10 @@ async def lifespan(app: FastAPI):
         pass
     await worker_manager.start_polling()
     scan_task = asyncio.create_task(_session_scan_loop())
+    usage_task = asyncio.create_task(_claude_usage_loop())
     yield
     scan_task.cancel()
+    usage_task.cancel()
     await worker_manager.stop_polling()
 
 
@@ -595,11 +626,10 @@ def _ui_version() -> str:
     return str(max(int(f.stat().st_mtime) for f in (BASE_DIR / "static").iterdir() if f.is_file()))
 
 
-@app.get("/")
-async def index():
-    """Serve index.html with ?v=<mtime> on local assets so browsers never run stale JS/CSS,
+def _page(name: str) -> HTMLResponse:
+    """Serve a page with ?v=<mtime> on local assets so browsers never run stale JS/CSS,
     and never from cache (phones keep old pages around otherwise)."""
-    html = (BASE_DIR / "static" / "index.html").read_text("utf-8")
+    html = (BASE_DIR / "static" / name).read_text("utf-8")
 
     def bust(m):
         f = BASE_DIR / "static" / m.group(1)
@@ -608,6 +638,26 @@ async def index():
     html = _STATIC_REF.sub(bust, html).replace(
         "<head>", f'<head>\n<meta name="pv-version" content="{_ui_version()}">', 1)
     return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/")
+async def index():
+    return _page("index.html")
+
+
+@app.get("/desk")
+async def desk_page():
+    """Full-screen status for a phone left on the desk (also what the iOS app shows)."""
+    return _page("desk.html")
+
+
+@app.get("/api/desk")
+async def desk_data():
+    ov = await asyncio.to_thread(
+        lambda: build_overview(linked_projects(), session_index.sessions(),
+                               hidden=hidden_sessions.snapshot(), keep_all=True))
+    snap = await asyncio.to_thread(usage_tracker.snapshot)
+    return {**desk_view(ov), "usage": desk_usage(snap, int(time.time() * 1000)), "version": _ui_version()}
 
 
 @app.get("/api/version")
@@ -854,6 +904,22 @@ async def hide_session(sid: str, body: dict = None):
     hidden_sessions.hide(sid, (body or {}).get("hidden", True))
     await ws_manager.broadcast({"type": "overview_changed"})
     return {"success": True}
+
+
+@app.post("/api/sessions/{sid}/reveal")
+async def reveal_session(sid: str, request: Request):
+    """From the desk display: wake this Mac and open the session where it lives
+    (once the Mac is unlocked, if it is locked). See reveal.py."""
+    s = _session_details(sid)[0]
+    port = request.url.port or 80
+    jarvis = f"http://localhost:{port}/"
+    if not s:
+        p = {"how": "jarvis", "open": [jarvis]} if sid.startswith("task:") else None
+    else:
+        p = await asyncio.to_thread(reveal.plan, s, headless(s), jarvis)
+    if not p:
+        return {"ok": False, "how": "none", "locked": False}
+    return await asyncio.to_thread(reveal.reveal, p)
 
 
 # ─── Sessions: read the conversation, send a new instruction ────────────────

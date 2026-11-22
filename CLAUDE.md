@@ -80,8 +80,32 @@ each on its own git branch. Inspired by "提高 Agentic Coding 吞吐量的 10 �
   desktop app's list (`claude -p` run in the desktop app's shell inherits that entrypoint). Such runs go idle
   when they finish and get no board card; the first entrypoint is kept in `entry0`, so `sdk-cli` appearing
   after a panel reply doesn't change it
+- Desk display: `GET /desk` (`static/desk.html/js/css`, standalone: no app.js, written for Safari on iOS 15)
+  polls `GET /api/desk` (`desk.desk_view()`: the overview's live cards plus recent idle sessions, six keys beside one
+  big lamp, `more` = sessions needing you that did not fit, `version` to reload on change). On transitions to
+  wait / error / done it washes the screen once and plays `static/sounds/*.wav`; in a browser it needs one tap to
+  unlock sound. `ios/JarvisDesk` (xcodegen, SwiftUI, iOS 15+) draws the same screen natively (`DeskStore.swift`:
+  polling with `X-Jarvis-Token`, alerts, brightness; `DeskView.swift`: lamp and keys), so **a look or alert change
+  goes in both**. It keeps the screen on, plays through the silent switch and lowers the brightness after 10 quiet
+  minutes. `configure.sh <team>` writes the git-ignored `Config/Local.xcconfig` with the address and token;
+  iOS 15 devices need Xcode 26.0.1–26.6. Tapping a key (or the big lamp: the session it shows) calls `POST /api/sessions/{sid}/reveal` (`reveal.py`):
+  wake the display (`caffeinate -u`), then open the session where it lives: a desktop-app session through
+  `claude://code/continue?session=local_…` (the app's own Dock / Spotlight link, no duplicate), a live one in
+  a terminal / editor by bringing up the outermost `.app` above the agent process whose cwd matches (the CLI
+  itself ships inside a `claude.app`), a finished CLI session by `claude://resume`, Jarvis's headless runs by
+  opening Jarvis. A locked Mac (`CGSSessionScreenIsLocked`) is unlocked only by opt-in: with the login password in
+  the keychain item `jarvis-unlock` (`security add-generic-password -U -s jarvis-unlock -a "$USER" -w`) and
+  Accessibility granted to the server's `Python.app`, `reveal.try_unlock()` types it into the lock screen (System
+  Events, password passed through the environment, never argv), at most once a minute, off for an hour after a
+  failed try; the request waits for it and answers `unlocked`. Otherwise the session opens after you unlock,
+  within 3 minutes. Anyone holding the access token can then unlock the Mac. `scripts/unlock-probe.sh` checks
+  that typing works on this Mac. Only the iOS app tells you about it; the web page just shows the wait.
+  Sessions some other program runs headless (`sdk-cli` without a Jarvis task: card field `scripted`) get no key
 - Usage: `usage.py`. Claude: the stream-json `rate_limit_event` (recorded during worker and panel runs;
-  `POST /api/usage/refresh` sends a tiny Haiku request that is not saved). Codex: `rate_limits` in the last
+  `POST /api/usage/refresh` sends a tiny Haiku request that is not saved; `server._claude_usage_loop` sends the
+  same at most every 30 minutes, and only when a Claude session was active since the last reading, since the
+  probe itself spends quota). `/api/desk` adds `usage` (`desk.desk_usage()`: per agent, what is left of its
+  tightest window, Antigravity's Gemini group only), drawn under the lamp in the iOS app. Codex: `rate_limits` in the last
   few days' rollout logs. Stored in `data/usage.json`, sent as `usage` with `/api/overview`. Antigravity:
   `agy -p /usage --output-format json --log-file /dev/null` (no tokens), refreshed in the background every
   5 minutes. The Antigravity session index reads both `~/.gemini/antigravity/` (IDE) and

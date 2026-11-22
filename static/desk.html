@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<title>Jarvis Desk</title>
+<link rel="stylesheet" href="/static/desk.css">
+</head>
+<body>
+<aside id="hero">
+  <div id="lamp"><div id="word"></div><div id="since"></div></div>
+  <div id="who"></div>
+  <div id="sub"></div>
+</aside>
+<main id="keys"></main>
+<div id="flash" hidden></div>
+<div id="start" hidden><button id="start-btn"></button></div>
+<div id="err" hidden></div>
+<script src="/static/desk.js"></script>
+<script>
+// a page caught mid-update (new markup, old script) never starts polling: try again
+setTimeout(function () { if (!window.jarvisDesk) location.reload(); }, 20000);
+</script>
+</body>
+</html>

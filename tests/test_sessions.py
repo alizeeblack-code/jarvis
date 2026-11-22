@@ -104,6 +104,9 @@ def test_session_states():
     base = {"archived": False, "awaiting": False}
     assert session_state({**base, "kind": "run", "last_at": NOW - 1000}, NOW) == "run"
     assert session_state({**base, "kind": "run", "last_at": NOW - LIVE_STALE_MS - 1}, NOW) == "quiet"
+    # a long tool call in flight (a test suite in the foreground) is still running
+    assert session_state({**base, "kind": "run", "last_at": NOW - 10 * 60_000,
+                          "busy_until": NOW + 1}, NOW) == "run"
     assert session_state({**base, "kind": "end", "last_at": NOW - 60_000}, NOW) == "done"
     assert session_state({**base, "kind": "end", "last_at": NOW - 60_000, "asks": True}, NOW) == "wait"
     # a pending AskUserQuestion leaves the turn "running" in the log but waits on you
@@ -233,3 +236,12 @@ def test_codex_code_mode_steps_and_headless_state():
     base = {"archived": False, "awaiting": False, "kind": "end", "last_at": NOW - 60_000}
     assert session_state({**base, "entry": "codex_exec"}, NOW) == "idle"
     assert session_state({**base, "entry": "codex_tui"}, NOW) == "done"
+
+
+def test_tool_budget():
+    from sessions import TOOL_MAX_MS, tool_budget_ms
+    assert tool_budget_ms("Bash", {}) == 3 * 60_000
+    assert tool_budget_ms("Bash", {"timeout": 600_000}) == 11 * 60_000
+    assert tool_budget_ms("Bash", {"timeout": 3_600_000}) == TOOL_MAX_MS
+    assert tool_budget_ms("Bash", {"run_in_background": True}) == LIVE_STALE_MS
+    assert tool_budget_ms("Agent", {}) == TOOL_MAX_MS

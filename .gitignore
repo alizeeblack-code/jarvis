@@ -47,3 +47,7 @@ PROGRESS.md
 
 # Claude Code runtime lock
 .claude/scheduled_tasks.lock
+
+# iOS desk app: local signing / address (has the token) and generated project
+ios/JarvisDesk/Config/Local.xcconfig
+ios/JarvisDesk/JarvisDesk.xcodeproj/

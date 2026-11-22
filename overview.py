@@ -292,6 +292,8 @@ def build_overview(projects: list, sessions: list, now_ms: int = None,
             "task": ref and {k: v for k, v in ref.items() if k not in ("started_at", "mcp")},
             "todo": _brief(_task_todo(s, ref) if ref else s.get("todo")),
             "ctx": s.get("ctx", 0), "ctx_level": context_level(s),
+            # run by some other program (claude -p, an SDK), not by you or a Jarvis task
+            "scripted": bool(headless(s) and not ref),
         }
         if state in NOW_STATES:
             cards.append(card)

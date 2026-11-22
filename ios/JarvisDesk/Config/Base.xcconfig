@@ -1,0 +1,5 @@
+// Shared settings. Your team, bundle id and Jarvis address go in Local.xcconfig
+// (written by ./configure.sh, not in git).
+PRODUCT_BUNDLE_IDENTIFIER = local.jarvis.desk
+JARVIS_DESK_URL =
+#include? "Local.xcconfig"

@@ -31,6 +31,8 @@ GAP_MS = 5 * 60 * 1000              # events closer than this form one working s
 MIN_SEG_MS = 60 * 1000              # a span with a single event still counts as a minute
 LIVE_STALE_MS = 90 * 1000           # "running" with no new event this long reads as quiet
 QUIET_WINDOW_MS = 30 * 60 * 1000    # quiet sessions older than this drop out of "now"
+TOOL_MAX_MS = 30 * 60 * 1000        # a tool call in flight counts as running for at most this long
+BASH_DEFAULT_MS = 2 * 60 * 1000     # Bash's own default timeout
 WAIT_WINDOW_MS = 3 * 3600 * 1000    # finished turns older than this are idle, not "waiting"
 
 # Cheap byte pre-filter before json.loads (most lines are attachments / request blobs).
@@ -166,6 +168,7 @@ def _new_entry(sid: str, parent: bool, agent: str = "claude") -> dict:
         "ctx": 0, "ctx_max": 0,       # tokens the latest call read (its context), and the window
         "bg": {},                     # background tasks still running: tool_use_id -> [started ms, task id]
         "bg_reads": {},               # TaskOutput calls waiting for their result: tool_use_id -> task id
+        "busy_until": 0,              # a tool call is in flight: running (not quiet) until this ms
         # did the latest turn leave something for you? (see asks_you)
         "wrap": None, "q": False, "tail": "",
     }
@@ -295,6 +298,7 @@ def ingest_line(entry: dict, d: dict, cutoff_ms: int):
             if b.get("type") == "tool_use":
                 name, inp = b.get("name", ""), b.get("input") if isinstance(b.get("input"), dict) else {}
                 entry["step"] = step_text(name, inp)
+                entry["busy_until"] = ts + tool_budget_ms(name, inp)
                 if name == "TodoWrite" and isinstance(inp.get("todos"), list):
                     entry["todo"] = todo_of([(t.get("status"), t.get("activeForm") if t.get("status") == "in_progress"
                                               and t.get("activeForm") else t.get("content"))
@@ -346,6 +350,7 @@ def ingest_line(entry: dict, d: dict, cutoff_ms: int):
     c = msg.get("content")
     if isinstance(c, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in c):
         entry["kind"] = "run"
+        entry["busy_until"] = 0             # the tool came back
         entry["q"] = False                  # the question was answered
         for b in c:
             if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id"):
@@ -768,6 +773,7 @@ class SessionIndex:
                         s[k] = e[k] or s[k]
                     s["ctx"], s["ctx_max"] = e.get("ctx", 0) or s["ctx"], e.get("ctx_max", 0) or s["ctx_max"]
                     s["bg"] = dict(e.get("bg") or {})
+                    s["busy_until"] = e.get("busy_until", 0)
                     s["path"] = path
                     s["asks"] = asks_you(e)
                 s["segs"] = [list(x) for x in e["segs"]] if newer else s["segs"]
@@ -930,6 +936,17 @@ def _sqlite_rows(path, sql) -> list:
         return []
 
 
+def tool_budget_ms(name: str, inp: dict) -> int:
+    """How long a tool call may run before its silence means something is off.
+    A foreground Bash (a test suite, a build) writes nothing to the log until it returns."""
+    if name == "Bash":
+        if inp.get("run_in_background"):
+            return LIVE_STALE_MS
+        t = inp.get("timeout")
+        return min((t if isinstance(t, (int, float)) and t > 0 else BASH_DEFAULT_MS) + 60_000, TOOL_MAX_MS)
+    return TOOL_MAX_MS                      # subagents, workflows, web fetches, MCP jobs
+
+
 def session_state(s: dict, now_ms: int) -> str:
     """run / wait (needs your reply) / done (turn finished, nothing asked) /
     quiet / error / limit / idle / archived."""
@@ -944,8 +961,8 @@ def session_state(s: dict, now_ms: int) -> str:
     if (s.get("awaiting") or s.get("asks")) and age <= WAIT_WINDOW_MS and not headless(s):
         return "wait"               # a question / plan approval holds the turn open too
     if kind == "run":
-        if age <= LIVE_STALE_MS:
-            return "run"
+        if age <= LIVE_STALE_MS or now_ms <= (s.get("busy_until") or 0):
+            return "run"                # including a long tool call still in flight
         return "quiet" if age <= QUIET_WINDOW_MS else "idle"
     if kind == "end":
         if background_running(s, now_ms) and age <= BG_MAX_MS:
