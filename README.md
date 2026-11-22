@@ -4,7 +4,11 @@
 
 **Every coding agent on your machine in one place — and the one waiting for you, answered from your desk or your phone.**
 
-![Overview: today's activity, what is running and what is waiting for you](docs/images/en/overview.png)
+A self-hosted dashboard for Claude Code, OpenAI Codex and Google Antigravity: see at a
+glance which session is running, which one is waiting for you and which has finished,
+reply from your phone, and run tasks in parallel, each in its own git worktree.
+
+![Jarvis overview: Claude Code, Codex and Antigravity sessions grouped by project, with the ones waiting for you on top](docs/images/en/overview.png)
 
 With Claude Code, Codex and Antigravity sessions running side by side, the hard part
 is no longer the code; it is noticing which session has stopped to ask you something.
@@ -25,15 +29,41 @@ The interface starts in Chinese; switch to English with the 中/EN button in the
   merge it from the page once the tests pass.
 - **A board by who acts next.** Todo / Queued / Running / Waiting for you / Done.
 - **Quota at a glance.** What is left of your Claude, Codex and Antigravity limits.
+- **A lamp on your desk.** An old iPhone becomes a status light for your agents; tap
+  a key and that session comes up on your Mac ([Desk display](#desk-display-optional)).
 
-![Project board: one card per line of work](docs/images/en/board.png)
+![Project board: one card per line of work, in columns by who acts next](docs/images/en/board.png)
 
 <p>
-  <img src="docs/images/en/session.png" width="68%" alt="Session panel: a session asking which fix to make">
-  <img src="docs/images/en/mobile.png" width="21%" alt="The overview on a phone">
+  <img src="docs/images/en/session.png" width="56%" alt="Session panel: a Claude Code session asking which fix to make, with reply buttons">
+  <img src="docs/images/en/mobile.png" width="20%" alt="The Jarvis overview on a phone: agent sessions and the ones waiting for you">
+  <img src="docs/images/en/mobile-session.png" width="20%" alt="Replying to a Claude Code session from a phone">
 </p>
 
 <sub>Screenshots use made-up demo projects.</sub>
+
+## How Jarvis compares
+
+Most tools for running many coding agents are launchers: the agents run inside them.
+Jarvis is the other way round. It watches the sessions you already have, wherever
+you started them (a terminal, the Claude desktop app, Codex, Antigravity), and
+tells you which one needs you, at the computer or away from it.
+
+| | Jarvis | [Linear](https://linear.app/coding-sessions) | [Conductor](https://conductor.build) | [Herdr](https://github.com/ogulcancelik/herdr) | [Claude Squad](https://github.com/smtg-ai/claude-squad) | [Agent Deck](https://github.com/asheshgoplani/agent-deck) |
+|---|---|---|---|---|---|---|
+| What it is | Local web dashboard + desk lamp | Issue tracker; agents in Linear's cloud | Mac app | Terminal multiplexer for agents | Terminal app (tmux) | Terminal app (tmux) + web UI |
+| Agents run on | Your machine | Linear's cloud | Your Mac | Your machine (or over ssh) | Your machine | Your machine |
+| Sessions you started elsewhere | Shown, from their logs | — | Its own | Its own | Its own | — |
+| Sorted by who acts next | Yes | — | Status per task | Working / blocked / done | Status per task | Status per session |
+| Phone | Read, reply, interrupt | Linear's mobile app | — | — | — | Web UI |
+| Status light, tap to open on the Mac | Yes | — | — | — | — | — |
+| Parallel tasks on branches | Worktree per task; merge after tests and a conflict check | Draft pull requests | Workspace per task; diff review, PR, merge | — | Worktree per task; commit and push | Worktrees |
+| License | MIT | Paid service | Closed source | Apache-2.0 | AGPL-3.0 | MIT |
+
+Pick Jarvis if you run several agents at once and want to know, from anywhere, which
+one is waiting for you. Pick a launcher if you want the agents themselves inside one
+app or one terminal; the two combine well. Details of other tools are from their own
+pages as of November 2026.
 
 ## How it works
 
@@ -88,6 +118,39 @@ claude mcp add --transport stdio -s user task-manager -- python3 /path/to/jarvis
 The MCP server finds the running dashboard on its own (it records its port in
 `data/server_port`); set `JARVIS_URL` to override.
 
+## Desk display (optional)
+
+![Desk display on an old iPhone: the time, a big lamp with two sessions waiting for you, quota left for Claude, Codex and Gemini, and six keys, one per session](docs/images/en/desk.png)
+
+`/desk` is a status screen for an old phone left on your desk: one big lamp saying
+how things stand and, beside it, six frosted keys, one per session, lit in muted
+colours by state (blue running, amber waiting on you, green done, grey idle, red
+error; the iOS app uses mint for running and warm white for done). Only what needs
+you moves, slowly. When a session turns to you, finishes or fails, the screen washes
+once in that colour and chimes; a turn still waiting chimes again every 5 minutes
+until you tap. Tap a key (or the big lamp, for the session it shows) to bring that
+session up on the Mac: a Claude desktop-app session opens itself, one in a terminal
+or editor brings that app to the front. The screen is woken first; if the Mac is
+locked, Jarvis waits for you to unlock it (Touch ID, Apple Watch) and opens the
+session then, or unlocks it for you if you opted in (see
+[Security](#security)). Open the page from another device as described there.
+
+In a phone browser you tap once to allow sound, and the screen sleeps unless you
+turn auto-lock off. `ios/JarvisDesk` is a native iOS app (SwiftUI, iOS 15+) that
+draws the same screen from `GET /api/desk`, keeps the screen on, chimes even with
+the silent switch on, shows the time above the lamp and what is left of the Claude,
+Codex and Gemini quotas below it, and lowers the screen brightness after 10 quiet
+minutes (more at night):
+
+```bash
+cd ios/JarvisDesk
+./configure.sh <your Apple team ID>   # writes Config/Local.xcconfig with this machine's address and token
+open JarvisDesk.xcodeproj             # run it on the phone
+```
+
+Press and hold with two fingers to change the address. To install on an iOS 15
+device you need Xcode 26.0.1–26.6; Xcode 27 debugs iOS 17 and later only.
+
 ## Security
 
 Read this before exposing Jarvis beyond your own machine.
@@ -116,6 +179,20 @@ Read this before exposing Jarvis beyond your own machine.
 - **Behind a reverse proxy on the same machine,** set `JARVIS_LOCAL_NO_TOKEN=0`;
   otherwise every proxied request looks local.
 - There is no TLS. Use a VPN or put Jarvis behind an HTTPS proxy.
+- **Unlocking the Mac from the desk display is off unless you turn it on.** To turn
+  it on, store your login password in your login keychain yourself and give the
+  Python that runs Jarvis Accessibility access (System Settings → Privacy & Security
+  → Accessibility):
+
+  ```bash
+  security add-generic-password -U -s jarvis-unlock -a "$USER" -w
+  ```
+
+  A tap on a locked Mac then types the password into the lock screen. It tries at
+  most once a minute and stops for an hour after a wrong password, so the account
+  is never locked out. `scripts/unlock-probe.sh` checks that typing works on your
+  Mac first. **Anyone holding the access token can then unlock this Mac;** delete
+  the keychain item to turn it off.
 
 ## Configuration
 
@@ -168,6 +245,10 @@ own CLI is set to.
 | `transcript.py`, `session_send.py` | Read a session; continue it from the browser |
 | `store.py` | Projects and tasks (`data/projects.json`) |
 | `usage.py` | Quota tracking |
+| `desk.py`, `static/desk.*` | Desk display (`/desk`) |
+| `reveal.py` | Opens a session on the Mac when its desk key is tapped (and the opt-in unlock) |
+| `scripts/unlock-probe.sh` | Checks that the opt-in unlock can type on this Mac |
+| `ios/JarvisDesk/` | Native iOS app for the desk display |
 | `mcp_task_server.py` | MCP task tools for agents on this machine |
 | `mcp_task_client.py` | The same tools for an agent on another machine, over HTTP (`--host`, `--port`, `--token`) |
 | `static/` | Front end |

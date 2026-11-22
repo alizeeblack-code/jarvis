@@ -4,7 +4,9 @@
 
 **本机所有编程 agent 一屏看全；哪个在等你回话，电脑上、手机上都能直接回。**
 
-![首页总览：今天的工作量、在跑的、等你的](docs/images/overview.png)
+一个自托管的 Claude Code、OpenAI Codex、Google Antigravity 会话看板：哪个会话在跑、哪个在等你、哪个做完了，一眼可见；在手机上就能回复；任务并行，各自跑在独立的 git worktree 里。
+
+![Jarvis 首页总览：Claude Code、Codex、Antigravity 的会话按项目归类，等你的排在最前](docs/images/overview.png)
 
 Claude Code、Codex、Antigravity 的会话同时开着好几个时，难的已经不是写代码，而是及时发现哪个会话停下来在等你回答。
 Jarvis 读取这些工具本来就会写的会话日志，按「现在该谁动」排好；新任务派出去，各自在独立的 git 分支上跑。
@@ -18,15 +20,34 @@ Jarvis 读取这些工具本来就会写的会话日志，按「现在该谁动�
 - **任务并行**：每个任务在自己的 git worktree 和分支里无人值守地跑，测试通过后在页面上一键合并。
 - **按「该谁动」排的看板**：Todo / 排队 / 进行中 / 等你 / 已完成。
 - **额度一目了然**：Claude、Codex、Antigravity 各还剩多少。
+- **桌上的一盏灯**：旧 iPhone 变成 agent 的状态灯，点一下就在 Mac 上打开那个会话（见[桌面状态屏](#桌面状态屏可选)）。
 
-![项目看板：一条工作线一张卡](docs/images/board.png)
+![项目看板：一条工作线一张卡，按该谁动分列](docs/images/board.png)
 
 <p>
-  <img src="docs/images/session.png" width="68%" alt="会话面板：会话在问你选哪种改法">
-  <img src="docs/images/mobile.png" width="21%" alt="手机上的首页">
+  <img src="docs/images/session.png" width="56%" alt="会话面板：Claude Code 会话在问你选哪种改法，下面是回复按钮">
+  <img src="docs/images/mobile.png" width="20%" alt="手机上的 Jarvis 首页：各个 agent 会话和等你的会话">
+  <img src="docs/images/mobile-session.png" width="20%" alt="在手机上回复 Claude Code 会话">
 </p>
 
 <sub>截图里是虚构的演示项目。</sub>
+
+## 和同类工具的区别
+
+同时跑多个编程 agent 的工具，大多是「启动器」：agent 在它里面跑。Jarvis 反过来，是「观察者」：你已经开着的会话，不管是在终端、Claude 桌面 app、Codex 还是 Antigravity 里开的，它都看得到，并告诉你哪个在等你，人在不在电脑前都行。
+
+| | Jarvis | [Linear](https://linear.app/coding-sessions) | [Conductor](https://conductor.build) | [Herdr](https://github.com/ogulcancelik/herdr) | [Claude Squad](https://github.com/smtg-ai/claude-squad) | [Agent Deck](https://github.com/asheshgoplani/agent-deck) |
+|---|---|---|---|---|---|---|
+| 形态 | 本地网页看板 + 桌面状态灯 | 任务管理工具，agent 跑在 Linear 云端 | Mac app | 给 agent 用的终端多路复用器 | 终端程序（tmux） | 终端程序（tmux）+ 网页界面 |
+| agent 跑在哪 | 你自己的电脑 | Linear 云端 | 你的 Mac | 你自己的电脑（或经 ssh 的远程机） | 你自己的电脑 | 你自己的电脑 |
+| 在别处开的会话 | 读日志自动出现 | — | 只管自己开的 | 只管自己开的 | 只管自己开的 | — |
+| 按「该谁动」排序 | 是 | — | 每个任务有状态 | 工作中 / 卡住 / 完成 | 每个任务有状态 | 每个会话有状态 |
+| 手机 | 看、回复、打断 | Linear 手机 app | — | — | — | 网页界面 |
+| 状态灯，点一下在 Mac 上打开 | 是 | — | — | — | — | — |
+| 并行任务与分支 | 每个任务一个 worktree；测试通过、检查无冲突后合并 | 产出 PR 草稿 | 每个任务一个工作区；看 diff、开 PR、合并 | — | 每个任务一个 worktree；提交并推送 | 支持 worktree |
+| 许可 | MIT | 付费服务 | 闭源 | Apache-2.0 | AGPL-3.0 | MIT |
+
+同时开着好几个 agent、想随时知道哪个在等你，选 Jarvis；想把 agent 本身装进一个 app 或一个终端里管，选启动器。两者可以一起用。其他工具的情况来自各自 2026 年 11 月的官方页面。
 
 ## 工作方式
 
@@ -75,6 +96,22 @@ claude mcp add --transport stdio -s user task-manager -- python3 /path/to/jarvis
 
 MCP 服务会自己找到正在运行的 Jarvis：Jarvis 启动时会把端口记在 `data/server_port`。要指定别的地址，设置 `JARVIS_URL`。
 
+## 桌面状态屏（可选）
+
+![旧 iPhone 上的桌面状态屏：时间、显示两个会话在等你的大灯、Claude / Codex / Gemini 剩余额度，以及每个会话一颗的六颗键](docs/images/desk.png)
+
+`/desk` 是给桌上旧手机用的状态屏：左边一盏大灯说明总体情况，右边六颗磨砂方形键，一颗对应一个会话，用柔和的颜色表示状态（蓝色运行中、琥珀色等你、绿色完成、灰色空闲、红色出错；iOS App 里运行中是薄荷绿、完成是暖白），只有需要你的那颗会慢慢呼吸。会话轮到你、完成或出错时，整屏淡淡泛一下对应的颜色并响铃；轮到你的会话没处理，每 5 分钟再响一次，点一下屏幕就停。点某颗键（或点大灯，对应灯上显示的那个会话），就在 Mac 上打开那个会话：Claude 桌面版的会话直接打开，终端或编辑器里的会话把那个 app 切到最前面。会先唤醒屏幕；Mac 锁着的话，会等你用 Touch ID 或 Apple Watch 解锁后再打开；如果你主动开启了自动解锁，就替你解锁（见[安全](#安全)一节）。从其他设备打开的方法也在那一节。
+
+用手机浏览器打开时，要先点一下才能出声，而且屏幕会自动锁定，除非关掉「自动锁定」。`ios/JarvisDesk` 是原生 iOS App（SwiftUI，iOS 15 起），直接读 `GET /api/desk` 画出同样的界面，保持屏幕常亮，静音键打开时也能响铃，大灯上方显示时间、下方显示 Claude、Codex、Gemini 的剩余额度，10 分钟没有新情况会把屏幕调暗（夜里更暗）：
+
+```bash
+cd ios/JarvisDesk
+./configure.sh <你的 Apple 团队 ID>   # 写入 Config/Local.xcconfig：本机地址和令牌
+open JarvisDesk.xcodeproj             # 在手机上运行
+```
+
+两指长按可以修改地址。要装到 iOS 15 的设备上，需要 Xcode 26.0.1–26.6；Xcode 27 只能调试 iOS 17 及以上。
+
 ## 安全
 
 **对本机以外开放之前，请先读这一节。**
@@ -102,6 +139,16 @@ MCP 服务会自己找到正在运行的 Jarvis：Jarvis 启动时会把端口�
 4. API 客户端可以发 `Authorization: Bearer <令牌>`。
 
 如果在同一台机器上给 Jarvis 套了反向代理，要设置 `JARVIS_LOCAL_NO_TOKEN=0`，否则所有经代理进来的请求都会被当成本机请求。
+
+### 从状态屏解锁 Mac（默认关闭）
+
+要开启，需要你自己把登录密码存进登录钥匙串，并给运行 Jarvis 的 Python 开「辅助功能」权限（系统设置 → 隐私与安全性 → 辅助功能）：
+
+```bash
+security add-generic-password -U -s jarvis-unlock -a "$USER" -w
+```
+
+之后在锁屏状态下点状态屏，Jarvis 会把密码输入锁屏界面。每分钟最多试一次，密码不对就停一小时，不会把账号锁住。可以先用 `scripts/unlock-probe.sh` 确认这台 Mac 上能输入。**开启后，拿到访问令牌的人就能解锁这台 Mac**；删掉这条钥匙串项即可关闭。
 
 ## 配置
 
@@ -150,6 +197,10 @@ Antigravity 任务可选的模型内置在 `usage.py` 里。要改的话，新�
 | `transcript.py`、`session_send.py` | 读会话、从网页续写会话 |
 | `store.py` | 项目与任务（`data/projects.json`） |
 | `usage.py` | 额度统计 |
+| `desk.py`、`static/desk.*` | 桌面状态屏（`/desk`） |
+| `reveal.py` | 在状态屏上点键时，在 Mac 上打开那个会话（以及可选的自动解锁） |
+| `scripts/unlock-probe.sh` | 检查这台 Mac 上能不能用自动解锁输入密码 |
+| `ios/JarvisDesk/` | 桌面状态屏的原生 iOS App |
 | `mcp_task_server.py` | 给本机 agent 用的 MCP 任务工具 |
 | `mcp_task_client.py` | 同一套工具，给另一台机器上的 agent 通过 HTTP 用（`--host`、`--port`、`--token`） |
 | `static/` | 前端 |
